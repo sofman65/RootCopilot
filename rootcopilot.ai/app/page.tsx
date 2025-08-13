@@ -1,26 +1,27 @@
-'use client'
+'use client';
 
-import { Authenticated, Unauthenticated } from 'convex/react'
-import { SignInButton, UserButton } from '@clerk/nextjs'
-import { useQuery } from 'convex/react'
-import { api } from '../convex/_generated/api'
+import Link from 'next/link';
+import { Authenticated, Unauthenticated } from 'convex/react';
+import { SignInButton } from '@clerk/nextjs';
 
-
-export default function Home() {
+export default function Page() {
   return (
     <>
       <Authenticated>
-        <UserButton />
-        <Content />
+        <main className="p-6">
+          <h1 className="text-2xl font-semibold mb-2">Welcome to RootCopilot</h1>
+          <p className="text-sm text-[hsl(var(--rcp-muted-fg))] mb-6">
+            Use the left sidebar to pick a Client → Project → Environment → Issue.
+          </p>
+          <Link href="/dashboard" className="rcp-btn rcp-btn-primary">Go to Dashboard</Link>
+        </main>
       </Authenticated>
+
       <Unauthenticated>
-        <SignInButton />
+        <div className="p-6">
+          <SignInButton />
+        </div>
       </Unauthenticated>
     </>
-  )
-}
-
-function Content() {
-  const messages = useQuery(api.messages.getForCurrentUser)
-  return <div>Authenticated content: {messages?.length}</div>
+  );
 }

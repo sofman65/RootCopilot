@@ -102,7 +102,7 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -118,5 +118,39 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .rcp-sidebar a {
+    @apply transition-all duration-200 ease-out text-[hsl(var(--rcp-fg))];
+  }
+  .rcp-sidebar a:hover {
+    @apply text-[hsl(var(--rcp-fg))];
+  }
+  /* Sidebar container styling */
+  .rcp-sidebar {
+    @apply bg-[hsl(var(--rcp-card))] text-[hsl(var(--rcp-fg))]
+           border-r border-[hsl(var(--rcp-border))]
+           h-svh px-3 py-4 flex flex-col w-[300px] shrink-0
+           overflow-y-auto overflow-x-hidden;
+  }
+  /* colors */
+  .rcp-sidebar {
+    --rcp-bg: var(--color-background);
+    --rcp-fg: var(--color-foreground);
+    --rcp-card: var(--color-card);
+    --rcp-card-fg: var(--color-card-foreground);
+    --rcp-popover: var(--color-popover);
+    --rcp-popover-fg: var(--color-popover-foreground);
+    --rcp-primary: var(--color-primary);
+    --rcp-primary-fg: var(--color-primary-foreground);
+    --rcp-secondary: var(--color-secondary);
+    --rcp-secondary-fg: var(--color-secondary-foreground);
+    --rcp-muted: var(--color-muted);
+    --rcp-muted-fg: var(--color-muted-foreground);
+    --rcp-accent: var(--color-accent);
+    --rcp-accent-fg: var(--color-accent-foreground);
+    --rcp-destructive: var(--color-destructive);
   }
 }
