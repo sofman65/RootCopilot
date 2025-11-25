@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 import SidebarHeader from "@/components/sidebar/SidebarHeader";
 import WorkspaceTree from "@/components/sidebar/WorkspaceTree";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const STORAGE_KEY = "rcp.sidebar.expanded.v1";
 
@@ -130,6 +131,11 @@ export default function AppSidebar() {
               icon: <IconPlugConnected className="h-5 w-5" />
             }}
           />
+        </div>
+
+        <div className={cn("mt-4 flex flex-col", open ? "gap-1" : "gap-0")}>
+          {open && <SectionLabel label="Appearance" className="px-1 mb-1" />}
+          <ThemeToggle />
         </div>
 
         {/* USER BUTTON AT BOTTOM (REAL CHATGPT STYLE) */}

@@ -5,9 +5,9 @@ import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
 import AppSidebar from "@/components/AppSidebar";
-
 import RootContentWrapper from "@/components/RootContentWrapper"; // <-- NEW WRAPPER
 import { SidebarProvider } from "@/components/ui/sidebar";
+import ThemeProviders from "@/components/ThemeProviders";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -33,17 +33,19 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ClerkProvider>
-          <ConvexClientProvider>
-             {/* WRAP SIDEBAR + CONTENT */}
-             <SidebarProvider>
-              <div className="min-h-screen w-full relative flex bg-white dark:bg-neutral-900 overflow-hidden">
-                <AppSidebar />
-                <RootContentWrapper>
-                  {children}
-                </RootContentWrapper>
-              </div>
-            </SidebarProvider>
-          </ConvexClientProvider>
+          <ThemeProviders>
+            <ConvexClientProvider>
+               {/* WRAP SIDEBAR + CONTENT */}
+               <SidebarProvider>
+                <div className="min-h-screen w-full relative flex bg-white dark:bg-neutral-900 overflow-hidden">
+                  <AppSidebar />
+                  <RootContentWrapper>
+                    {children}
+                  </RootContentWrapper>
+                </div>
+              </SidebarProvider>
+            </ConvexClientProvider>
+          </ThemeProviders>
         </ClerkProvider>
       </body>
     </html>
