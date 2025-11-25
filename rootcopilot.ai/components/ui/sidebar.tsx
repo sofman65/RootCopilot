@@ -92,26 +92,45 @@ export const DesktopSidebar = ({
   ...props
 }: React.ComponentProps<typeof motion.div>) => {
   const { open, setOpen, animate } = useSidebar();
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Explicitly disable the desktop rail on mobile to avoid it occupying space
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsMobile(e.matches);
+    };
+    handleChange(mq);
+    mq.addEventListener("change", handleChange as (e: MediaQueryListEvent) => void);
+    return () => mq.removeEventListener("change", handleChange as (e: MediaQueryListEvent) => void);
+  }, []);
+
+  if (isMobile) {
+    return null;
+  }
   return (
     <>
       <motion.div
         className={cn(
-          // Full-height, scrollable, beautiful gradient that adapts to theme
-          "hidden md:flex md:flex-col h-svh w-[300px] shrink-0 overflow-y-auto px-4 py-4",
-          // Light mode
-          "border-r border-neutral-200 bg-gradient-to-b from-white to-neutral-50",
-          // Dark mode
-          "dark:border-neutral-800 dark:bg-gradient-to-b dark:from-neutral-900 dark:to-neutral-800",
+          // Full-height, fixed background that never changes height - ChatGPT style
+          "hidden md:flex md:flex-col fixed left-0 top-0 h-screen w-[300px] shrink-0",
+          // Light mode - clean white background like ChatGPT
+          "border-r border-neutral-200 bg-white",
+          // Dark mode - dark background like ChatGPT
+          "dark:border-neutral-700 dark:bg-neutral-900",
           className,
         )}
         animate={{
-          width: animate ? (open ? "300px" : "120px") : "300px",
+          width: animate ? (open ? "300px" : "100px") : "300px",
         }}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         {...props}
       >
-        {children}
+        <div className="flex flex-col h-full p-0">
+          {children as React.ReactNode}
+        </div>
       </motion.div>
     </>
   );
@@ -195,10 +214,11 @@ export const SidebarLink = ({
       href={link.href}
       onClick={handleClick}
       className={cn(
-        // Row styling with hover states that adapt to theme
-        "flex items-center justify-start gap-2 group/sidebar py-2 px-2 rounded-md",
-        "hover:bg-neutral-200/60 dark:hover:bg-neutral-800/60",
-        "text-neutral-800 dark:text-neutral-200",
+        // ChatGPT-style row styling with clean hover states
+        "flex items-center justify-start gap-3 group/sidebar py-2.5 px-3 rounded-lg transition-colors",
+        "hover:bg-neutral-100 dark:hover:bg-neutral-800",
+        "text-neutral-700 dark:text-neutral-200",
+        "text-sm font-medium",
         className
       )}
       {...props}

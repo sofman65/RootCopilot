@@ -5,22 +5,22 @@ import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { useQuery } from "convex/react";
 import { UserButton } from "@clerk/nextjs";
+
 import {
   IconDashboard,
-  IconFolder,
+  IconSettings,
   IconFolders,
+  IconFolder,
   IconLayersSubtract,
   IconList,
-  IconSettings,
-  IconChevronRight,
+  IconChevronRight
 } from "@tabler/icons-react";
 
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { api } from "@/convex/_generated/api";
+
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import Link from "next/link";
-
-
 
 type Issue = Doc<"issues">;
 
@@ -35,31 +35,28 @@ type Persisted = {
 export default function AppSidebar() {
   const router = useRouter();
 
+  const [expandedClients, setExpandedClients] = useState(new Set<Id<"clients">>());
+  const [expandedProjects, setExpandedProjects] = useState(new Set<Id<"projects">>());
+  const [expandedEnvs, setExpandedEnvs] = useState(new Set<Id<"environments">>());
 
-  // expansion state
-  const [expandedClients, setExpandedClients] = useState<Set<Id<"clients">>>(new Set());
-  const [expandedProjects, setExpandedProjects] = useState<Set<Id<"projects">>>(new Set());
-  const [expandedEnvs, setExpandedEnvs] = useState<Set<Id<"environments">>>(new Set());
-
-  // load persisted expansion
+  // Restore saved expansion state
   useEffect(() => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const p: Persisted = JSON.parse(raw);
-        setExpandedClients(new Set(p.clients));
-        setExpandedProjects(new Set(p.projects));
-        setExpandedEnvs(new Set(p.envs));
-      }
+      const parsed: Persisted = JSON.parse(raw);
+      setExpandedClients(new Set(parsed.clients));
+      setExpandedProjects(new Set(parsed.projects));
+      setExpandedEnvs(new Set(parsed.envs));
     } catch {}
   }, []);
 
-  // persist on change
+  // Save expansion state
   useEffect(() => {
     const p: Persisted = {
       clients: Array.from(expandedClients),
       projects: Array.from(expandedProjects),
-      envs: Array.from(expandedEnvs),
+      envs: Array.from(expandedEnvs)
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
@@ -70,52 +67,54 @@ export default function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarBody className="justify-between h-full">
-        <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto" aria-label="Workspace navigation">
-          <BrandHeader />
-
-          <div className="mt-3 flex flex-col gap-1">
-            <SidebarLink link={{ label: "Dashboard", href: "/dashboard", icon: <IconDashboard className="h-5 w-5" /> }} />
-            <SidebarLink link={{ label: "Settings", href: "/settings", icon: <IconSettings className="h-5 w-5" /> }} />
-          </div>
-
-          <div className="mt-4 flex flex-col gap-1">
-            {clients === undefined && <SkeletonList count={5} />}
-            {clients?.map((c) => (
-              <div key={c._id}>
-                <SidebarRow
-                  label={c.name}
-                  icon={<IconFolders className="h-5 w-5" />}
-                  expanded={expandedClients.has(c._id)}
-                  onToggle={() =>
-                    setExpandedClients((s) => {
-                      const n = new Set(s);
-                      if (n.has(c._id)) {
-                        n.delete(c._id);
-                      } else {
-                        n.add(c._id);
-                      }
-                      return n;
-                    })
-                  }
-                />
-                {expandedClients.has(c._id) && (
-                  <ProjectList
-                    clientId={c._id}
-                    expandedProjects={expandedProjects}
-                    setExpandedProjects={setExpandedProjects}
-                    expandedEnvs={expandedEnvs}
-                    setExpandedEnvs={setExpandedEnvs}
-                    openIssue={(id) => router.push(`/issues/${id}/thread`)}
-                  />
-                )}
-              </div>
-            ))}
-          </div>
+      <SidebarBody className="flex flex-col h-full select-none">
+        <div className="px-3 py-3">
+        <SidebarHeader />
         </div>
 
-        <div className="px-1 py-2">
-          <UserButton appearance={{ elements: { userButtonBox: "justify-start" } }} />
+        {/* MAIN NAV */}
+        <div className="flex flex-col gap-1 mt-3">
+          <SidebarLink
+            link={{
+              label: "Dashboard",
+              href: "/dashboard",
+              icon: <IconDashboard className="h-5 w-5" />
+            }}
+          />
+          <SidebarLink
+            link={{
+              label: "Settings",
+              href: "/settings",
+              icon: <IconSettings className="h-5 w-5" />
+            }}
+          />
+        </div>
+
+        {/* SCROLLABLE WORKSPACE NAV */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden mt-6 min-h-0">
+          <WorkspaceTree
+            clients={clients}
+            expandedClients={expandedClients}
+            setExpandedClients={setExpandedClients}
+            expandedProjects={expandedProjects}
+            setExpandedProjects={setExpandedProjects}
+            expandedEnvs={expandedEnvs}
+            setExpandedEnvs={setExpandedEnvs}
+            openIssue={(id) => router.push(`/issues/${id}/thread`)}
+          />
+        </div>
+
+        {/* USER BUTTON AT BOTTOM (REAL CHATGPT STYLE) */}
+        <div className="mt-auto border-t border-neutral-200 dark:border-neutral-700 p-2">
+          <UserButton
+            appearance={{
+              elements: {
+                userButtonBox: "w-full justify-start",
+                userButtonTrigger:
+                  "w-full justify-start p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              }
+            }}
+          />
         </div>
       </SidebarBody>
     </Sidebar>
@@ -123,82 +122,118 @@ export default function AppSidebar() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   Branding
+   LOGO (ChatGPT-style)
    ────────────────────────────────────────────────────────────────────────────── */
 
-function BrandHeader() {
+function SidebarHeader() {
   const { open } = useSidebar();
-  return open ? <Logo /> : <LogoIcon />;
+
+  return open ? <LogoExpanded /> : <LogoCollapsed />;
 }
 
-function Logo() {
+function LogoExpanded() {
   return (
-    <Link
-      href="/"
-      className="relative z-20 flex items-center space-x-2 py-1 text-sm font-normal text-black dark:text-white"
-    >
-      <div className="h-5 w-6 shrink-0 rounded-tl-lg rounded-tr-sm rounded-br-lg rounded-bl-sm bg-black dark:bg-white" />
-      <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="font-medium whitespace-pre">
+    <Link href="/" className="flex items-center gap-2 px-2 text-neutral-900 dark:text-neutral-100">
+      <div className="h-6 w-6 rounded-md bg-black dark:bg-white" />
+      <motion.span
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="font-medium text-sm"
+      >
         rootcopilot.ai
       </motion.span>
-    </Link> 
+    </Link>
   );
 }
 
-function LogoIcon() {
+function LogoCollapsed() {
   return (
-    <Link
-      href="/"
-      className="relative z-20 flex items-center space-x-2 py-1 text-sm font-normal text-black dark:text-white"
-    >
-      <div className="h-5 w-6 shrink-0 rounded-tl-lg rounded-tr-sm rounded-br-lg rounded-bl-sm bg-black dark:bg-white" />
+    <Link href="/" className="flex items-center justify-center px-1 text-neutral-900 dark:text-neutral-100">
+      <div className="h-6 w-6 rounded-md bg-black dark:bg-white" />
     </Link>
   );
 }
 
 /* ──────────────────────────────────────────────────────────────────────────────
-   Nodes
+   WORKSPACE TREE (Clients > Projects > Envs > Issues)
    ────────────────────────────────────────────────────────────────────────────── */
 
+function WorkspaceTree({
+  clients,
+  expandedClients,
+  setExpandedClients,
+  expandedProjects,
+  setExpandedProjects,
+  expandedEnvs,
+  setExpandedEnvs,
+  openIssue
+}: {
+  clients: ReturnType<typeof useQuery<typeof api.clients.list>>;
+  expandedClients: Set<Id<"clients">>;
+  setExpandedClients: React.Dispatch<React.SetStateAction<Set<Id<"clients">>>>;
+  expandedProjects: Set<Id<"projects">>;
+  setExpandedProjects: React.Dispatch<React.SetStateAction<Set<Id<"projects">>>>;
+  expandedEnvs: Set<Id<"environments">>;
+  setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<Id<"environments">>>>;
+  openIssue: (x: Id<"issues">) => void;
+}) {
+  const { open } = useSidebar();
 
+  if (!open) {
+    // Collapsed mode: show only icons to match ChatGPT
+    return (
+      <div className="flex flex-col gap-4 items-center text-neutral-500 dark:text-neutral-400 pt-2">
+        {/* Looks empty in collapsed mode, correct ChatGPT behavior */}
+      </div>
+    );
+  }
 
+  if (clients === undefined) return <SkeletonList count={5} />;
 
-
-function IssueRow({ issue, openIssue }: { issue: Issue; openIssue: (id: Id<"issues">) => void }) {
   return (
-    <SidebarLink
-      link={{
-        label: `#${issue._id.slice(-6)} ${issue.title}`,
-        href: "#",
-        icon: <IconList className="h-5 w-5" />,
-      }}
-      onClick={() => openIssue(issue._id)}
-    />
-  );
-}
+    <div className="flex flex-col gap-1 pb-4">
+      {clients.map((client) => (
+        <div key={client._id}>
+          <TreeRow
+            label={client.name}
+            icon={<IconFolders className="h-5 w-5" />}
+            expanded={expandedClients.has(client._id)}
+            onToggle={() =>
+              toggle(expandedClients, setExpandedClients, client._id)
+            }
+          />
 
-/* ──────────────────────────────────────────────────────────────────────────────
-   Skeleton loader
-   ────────────────────────────────────────────────────────────────────────────── */
-
-function SkeletonList({ count, indent = false }: { count: number; indent?: boolean }) {
-  return (
-    <ul role="none" className={indent ? "ml-1" : ""}>
-      {Array.from({ length: count }).map((_, i) => (
-        <li key={i} className="my-1">
-          <div className="h-7 w-full rounded-[calc(var(--rcp-radius)-0.5rem)] bg-[hsl(var(--rcp-muted))]/40 animate-pulse" />
-        </li>
+          {expandedClients.has(client._id) && (
+            <ProjectList
+              clientId={client._id}
+              expandedProjects={expandedProjects}
+              setExpandedProjects={setExpandedProjects}
+              expandedEnvs={expandedEnvs}
+              setExpandedEnvs={setExpandedEnvs}
+              openIssue={openIssue}
+            />
+          )}
+        </div>
       ))}
-    </ul>
+    </div>
   );
 }
 
-// Lightweight row with a chevron toggle using SidebarLink
-function SidebarRow({
+/* ─────────────── UTILS ─────────────── */
+
+function toggle<T>(set: Set<T>, setter: (v: Set<T>) => void, val: T) {
+  const next = new Set(set);
+  next.has(val) ? next.delete(val) : next.add(val);
+  setter(next);
+}
+
+/* ─────────────── RECURSIVE TREE COMPONENTS ─────────────── */
+
+function TreeRow({
   label,
   icon,
   expanded,
-  onToggle,
+  onToggle
 }: {
   label: string;
   icon: React.ReactNode;
@@ -206,55 +241,40 @@ function SidebarRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-center">
-      <button
-        aria-label={expanded ? "Collapse" : "Expand"}
-        onClick={onToggle}
-        className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded hover:bg-[hsl(var(--rcp-muted))]"
-      >
-        <IconChevronRight className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : "rotate-0"}`} />
-      </button>
-      <SidebarLink link={{ label, href: "#", icon }} onClick={onToggle} />
-    </div>
+    <button
+      onClick={onToggle}
+      className="flex items-center gap-3 w-full py-2 px-3 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-200 text-sm font-medium"
+    >
+      {icon}
+      <span className="flex-1 text-left truncate">{label}</span>
+      <IconChevronRight
+        className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`}
+      />
+    </button>
   );
 }
 
-function ProjectList({
-  clientId,
-  expandedProjects,
-  setExpandedProjects,
-  expandedEnvs,
-  setExpandedEnvs,
-  openIssue,
-}: {
+function ProjectList({ clientId, expandedProjects, setExpandedProjects, expandedEnvs, setExpandedEnvs, openIssue }:
+{
   clientId: Id<"clients">;
   expandedProjects: Set<Id<"projects">>;
   setExpandedProjects: React.Dispatch<React.SetStateAction<Set<Id<"projects">>>>;
   expandedEnvs: Set<Id<"environments">>;
   setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<Id<"environments">>>>;
-  openIssue: (id: Id<"issues">) => void;
+  openIssue: (x: Id<"issues">) => void;
 }) {
   const projects = useQuery(api.projects.listByClient, { clientId });
   if (projects === undefined) return <SkeletonList count={3} indent />;
+
   return (
     <div className="ml-3">
       {projects.map((p) => (
         <div key={p._id}>
-          <SidebarRow
+          <TreeRow
             label={p.name}
             icon={<IconFolder className="h-5 w-5" />}
             expanded={expandedProjects.has(p._id)}
-            onToggle={() =>
-              setExpandedProjects((s) => {
-                const n = new Set(s);
-                if (n.has(p._id)) {
-                  n.delete(p._id);
-                } else {
-                  n.add(p._id);
-                }
-                return n;
-              })
-            }
+            onToggle={() => toggle(expandedProjects, setExpandedProjects, p._id)}
           />
           {expandedProjects.has(p._id) && (
             <EnvironmentList
@@ -270,54 +290,70 @@ function ProjectList({
   );
 }
 
-function EnvironmentList({
-  projectId,
-  expandedEnvs,
-  setExpandedEnvs,
-  openIssue,
-}: {
+function EnvironmentList({ projectId, expandedEnvs, setExpandedEnvs, openIssue }:
+{
   projectId: Id<"projects">;
   expandedEnvs: Set<Id<"environments">>;
   setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<Id<"environments">>>>;
-  openIssue: (id: Id<"issues">) => void;
+  openIssue: (x: Id<"issues">) => void;
 }) {
   const envs = useQuery(api.environments.listByProject, { projectId });
   if (envs === undefined) return <SkeletonList count={4} indent />;
+
   return (
     <div className="ml-3">
-      {envs.map((e) => (
-        <div key={e._id}>
-          <SidebarRow
-            label={e.name}
+      {envs.map((env) => (
+        <div key={env._id}>
+          <TreeRow
+            label={env.name}
             icon={<IconLayersSubtract className="h-5 w-5" />}
-            expanded={expandedEnvs.has(e._id)}
-            onToggle={() =>
-              setExpandedEnvs((s) => {
-                const n = new Set(s);
-                if (n.has(e._id)) {
-                  n.delete(e._id);
-                } else {
-                  n.add(e._id);
-                }
-                return n;
-              })
-            }
+            expanded={expandedEnvs.has(env._id)}
+            onToggle={() => toggle(expandedEnvs, setExpandedEnvs, env._id)}
           />
-          {expandedEnvs.has(e._id) && <IssueList environmentId={e._id} openIssue={openIssue} />}
+          {expandedEnvs.has(env._id) && (
+            <IssueList environmentId={env._id} openIssue={openIssue} />
+          )}
         </div>
       ))}
     </div>
   );
 }
 
-function IssueList({ environmentId, openIssue }: { environmentId: Id<"environments">; openIssue: (id: Id<"issues">) => void }) {
+function IssueList({ environmentId, openIssue }:
+{
+  environmentId: Id<"environments">;
+  openIssue: (x: Id<"issues">) => void;
+}) {
   const issues = useQuery(api.issues.listByEnvironment, { environmentId });
   if (issues === undefined) return <SkeletonList count={5} indent />;
+
   return (
     <div className="ml-3">
-      {issues.map((i) => (
-        <IssueRow key={i._id} issue={i} openIssue={openIssue} />)
-      )}
+      {issues.map((issue) => (
+        <SidebarLink
+          key={issue._id}
+          link={{
+            label: `#${issue._id.slice(-6)} ${issue.title}`,
+            href: "#",
+            icon: <IconList className="h-5 w-5" />
+          }}
+          onClick={() => openIssue(issue._id)}
+        />
+      ))}
     </div>
+  );
+}
+
+/* ─────────────── SKELETON LOADER ─────────────── */
+
+function SkeletonList({ count, indent = false }: { count: number; indent?: boolean }) {
+  return (
+    <ul className={indent ? "ml-3" : ""}>
+      {Array.from({ length: count }).map((_, i) => (
+        <li key={i} className="my-1">
+          <div className="h-6 w-full rounded-md bg-neutral-200 dark:bg-neutral-700 animate-pulse" />
+        </li>
+      ))}
+    </ul>
   );
 }

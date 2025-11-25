@@ -108,6 +108,7 @@ export default function ThreadPage({
       {/* Message Input Placeholder */}
       <div className="border-t border-neutral-200 dark:border-neutral-700 p-4">
         <div className="flex gap-2">
+            
           <div className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
             Ask a question about this issue...
           </div>

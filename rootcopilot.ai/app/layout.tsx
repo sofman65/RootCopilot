@@ -32,7 +32,8 @@ export default function RootLayout({
           <ConvexClientProvider>
             <div style={{ display: 'flex', minHeight: '100vh' }}>
               <AppSidebar />
-              <div style={{ flex: 1 }} className="pt-12 md:pt-0">
+              <div className="flex-1 min-h-screen md:pl-[100px] lg:pl-[300px]">
+
                 {children}
               </div>
             </div>
