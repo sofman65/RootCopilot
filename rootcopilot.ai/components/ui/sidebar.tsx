@@ -61,21 +61,18 @@ export const SidebarProvider = ({
 
 export const Sidebar = ({
   children,
-  open,
-  setOpen,
-  animate,
+  className,
 }: {
   children: React.ReactNode;
-  open?: boolean;
-  setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
-  animate?: boolean;
+  className?: string;
 }) => {
   return (
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate}>
+    <div className={className}>
       {children}
-    </SidebarProvider>
+    </div>
   );
 };
+
 
 export const SidebarBody = (props: React.ComponentProps<typeof motion.div>) => {
   return (
