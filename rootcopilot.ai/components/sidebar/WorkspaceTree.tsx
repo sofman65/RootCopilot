@@ -33,12 +33,6 @@ export default function WorkspaceTree({
 }: WorkspaceTreeProps) {
   const { open } = useSidebar();
 
-  if (!open) {
-    return (
-      <div className="flex flex-col gap-4 items-center text-neutral-500 dark:text-neutral-400 pt-2" aria-hidden="true" />
-    );
-  }
-
   if (clients === undefined) return <SkeletonList count={5} />;
 
   return (

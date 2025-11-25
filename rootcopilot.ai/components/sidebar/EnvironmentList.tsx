@@ -9,6 +9,7 @@ import TreeRow from "./TreeRow";
 import IssueList from "./IssueList";
 import SkeletonList from "./SkeletonList";
 import { toggle } from "./toggle";
+import { useSidebar } from "@/components/ui/sidebar";
 
 type EnvironmentListProps = {
   projectId: Id<"projects">;
@@ -23,11 +24,12 @@ export default function EnvironmentList({
   setExpandedEnvs,
   openIssue
 }: EnvironmentListProps) {
+  const { open } = useSidebar();
   const envs = useQuery(api.environments.listByProject, { projectId });
   if (envs === undefined) return <SkeletonList count={4} indent />;
 
   return (
-    <div className="ml-3">
+    <div className={open ? "ml-3" : "ml-0"}>
       {envs.map((env) => (
         <div key={env._id}>
           <TreeRow

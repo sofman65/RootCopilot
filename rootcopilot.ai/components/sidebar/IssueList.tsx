@@ -7,6 +7,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 import { SidebarLink } from "@/components/ui/sidebar";
 import SkeletonList from "./SkeletonList";
+import { useSidebar } from "@/components/ui/sidebar";
 
 type IssueListProps = {
   environmentId: Id<"environments">;
@@ -14,11 +15,12 @@ type IssueListProps = {
 };
 
 export default function IssueList({ environmentId, openIssue }: IssueListProps) {
+  const { open } = useSidebar();
   const issues = useQuery(api.issues.listByEnvironment, { environmentId });
   if (issues === undefined) return <SkeletonList count={5} indent />;
 
   return (
-    <div className="ml-3">
+    <div className={open ? "ml-3" : "ml-0"}>
       {issues.map((issue) => (
         <SidebarLink
           key={issue._id}

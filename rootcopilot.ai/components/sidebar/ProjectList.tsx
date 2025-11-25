@@ -9,6 +9,7 @@ import TreeRow from "./TreeRow";
 import EnvironmentList from "./EnvironmentList";
 import SkeletonList from "./SkeletonList";
 import { toggle } from "./toggle";
+import { useSidebar } from "@/components/ui/sidebar";
 
 type ProjectListProps = {
   clientId: Id<"clients">;
@@ -27,11 +28,12 @@ export default function ProjectList({
   setExpandedEnvs,
   openIssue
 }: ProjectListProps) {
+  const { open } = useSidebar();
   const projects = useQuery(api.projects.listByClient, { clientId });
   if (projects === undefined) return <SkeletonList count={3} indent />;
 
   return (
-    <div className="ml-3">
+    <div className={open ? "ml-3" : "ml-0"}>
       {projects.map((p) => (
         <div key={p._id}>
           <TreeRow

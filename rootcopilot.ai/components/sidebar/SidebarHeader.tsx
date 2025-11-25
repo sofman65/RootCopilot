@@ -18,7 +18,7 @@ function LogoExpanded() {
 function LogoCollapsed() {
   return (
     <Link href="/" className="flex items-center justify-center px-1 text-neutral-900 dark:text-neutral-100">
-      <div className="h-6 w-6 rounded-md bg-black dark:bg-white" />
+      <div className="h-5 w-5 rounded-md bg-black dark:bg-white" />
     </Link>
   );
 }

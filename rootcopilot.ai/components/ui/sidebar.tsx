@@ -211,8 +211,8 @@ export const SidebarLink = ({
       href={link.href}
       onClick={handleClick}
       className={cn(
-        // ChatGPT-style row styling with clean hover states
-        "flex items-center justify-start gap-3 group/sidebar py-2.5 px-3 rounded-lg transition-colors",
+        "flex items-center gap-3 group/sidebar py-2.5 rounded-lg transition-colors",
+        open ? "px-3 justify-start" : "px-0 justify-center",
         "hover:bg-neutral-100 dark:hover:bg-neutral-800",
         "text-neutral-700 dark:text-neutral-200",
         "text-sm font-medium",
@@ -224,10 +224,14 @@ export const SidebarLink = ({
 
       <motion.span
         animate={{
-          display: animate ? (open ? "inline-block" : "none") : "inline-block",
           opacity: animate ? (open ? 1 : 0) : 1,
+          width: animate ? (open ? "auto" : 0) : "auto",
         }}
-        className="text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0"
+        className={cn(
+          "text-sm whitespace-pre inline-block !p-0 !m-0 transition-all duration-150",
+          "group-hover/sidebar:translate-x-1",
+          !open && "overflow-hidden"
+        )}
       >
         {link.label}
       </motion.span>
