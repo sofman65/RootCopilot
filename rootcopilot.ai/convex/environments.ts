@@ -10,3 +10,10 @@ export const listByProject = query({
       .collect()
   },
 })
+
+export const getById = query({
+  args: { id: v.id('environments') },
+  handler: async (ctx, { id }) => {
+    return ctx.db.get(id)
+  },
+})

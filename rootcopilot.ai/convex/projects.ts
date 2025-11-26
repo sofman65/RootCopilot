@@ -10,3 +10,10 @@ export const listByClient = query({
       .collect()
   },
 })
+
+export const getById = query({
+  args: { id: v.id('projects') },
+  handler: async (ctx, { id }) => {
+    return ctx.db.get(id)
+  },
+})
