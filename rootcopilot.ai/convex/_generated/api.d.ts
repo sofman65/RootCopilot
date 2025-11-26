@@ -13,12 +13,14 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as assistant from "../assistant.js";
 import type * as clients from "../clients.js";
 import type * as environments from "../environments.js";
 import type * as issues from "../issues.js";
 import type * as messages from "../messages.js";
 import type * as projects from "../projects.js";
 import type * as seed from "../seed.js";
+import type * as thread_messages from "../thread_messages.js";
 import type * as threads from "../threads.js";
 
 /**
@@ -30,12 +32,14 @@ import type * as threads from "../threads.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  assistant: typeof assistant;
   clients: typeof clients;
   environments: typeof environments;
   issues: typeof issues;
   messages: typeof messages;
   projects: typeof projects;
   seed: typeof seed;
+  thread_messages: typeof thread_messages;
   threads: typeof threads;
 }>;
 export declare const api: FilterApi<
