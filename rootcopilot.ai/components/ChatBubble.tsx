@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { IconUser, IconRobot } from "@tabler/icons-react";
+import MarkdownRenderer from "./MarkdownRenderer";
 
 interface ChatBubbleProps {
   role: "user" | "assistant";
@@ -39,7 +40,7 @@ export function ChatBubble({ role, content, timestamp, className }: ChatBubblePr
             : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-bl-sm"
         )}
       >
-        <div className="whitespace-pre-wrap break-words">{content}</div>
+      <MarkdownRenderer>{content}</MarkdownRenderer>
         {timestamp && (
           <div
             className={cn(

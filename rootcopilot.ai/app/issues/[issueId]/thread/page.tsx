@@ -5,7 +5,8 @@ import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
-import { ChatBubble, ChatBubbleSkeleton } from "@/components/ChatBubble";
+import { ChatBubble } from "@/components/ChatBubble";
+import { ChatBubbleSkeleton } from "@/components/ChatBubbleSkeleton";
 import TypingBubble from "@/components/TypingBubble";
 import QuickActions from "@/components/QuickActions";
 
