@@ -5,7 +5,7 @@ export default function CodeBlock({
     className,  
     children,
     ...props
-  }: { inline: boolean, className: string, children: React.ReactNode, props: React.HTMLAttributes<HTMLElement> }) {
+  }: { inline: boolean, className: string, children: React.ReactNode } & React.HTMLAttributes<HTMLElement>) {
     const match = /language-(\w+)/.exec(className || "");
     const language = match ? match[1] : "code";
     const codeText = String(children).trim();

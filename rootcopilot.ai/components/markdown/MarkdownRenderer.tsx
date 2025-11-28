@@ -98,8 +98,8 @@ export default function MarkdownRenderer({ children }: { children: string }) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
-          code: ({ inline, className, children, ...props }: { inline: boolean, className: string, children: React.ReactNode, props: React.HTMLAttributes<HTMLElement> }) => {
-            return <CodeBlock inline={inline} className={className} {...props}>{children}</CodeBlock>;
+          code: ({ inline, className, children, ...props }: React.ComponentPropsWithoutRef<'code'> & { inline?: boolean }) => {
+            return <CodeBlock inline={inline ?? false} className={className ?? ''} {...props}>{children}</CodeBlock>;
           },
 
           h2({ children }) {

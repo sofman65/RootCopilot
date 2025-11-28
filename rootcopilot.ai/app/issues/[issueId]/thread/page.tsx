@@ -11,6 +11,7 @@ import TypingBubble from "@/components/TypingBubble";
 import QuickActions from "@/components/QuickActions";
 
 import { IconMessageCircle } from "@tabler/icons-react";
+import { groupMessages } from "@/lib/utils";
 
 export default function ThreadPage({
   params,
@@ -52,6 +53,10 @@ export default function ThreadPage({
   const issue = useQuery(api.issues.get, {
     id: issueId as Id<"issues">,
   });
+  const groupedMessages = React.useMemo(
+    () => (messages ? groupMessages(messages) : []),
+    [messages]
+  );
 
   // --------------------------------------
   // CREATE THREAD IF DOESN'T EXIST
@@ -186,12 +191,14 @@ export default function ThreadPage({
             <p className="text-sm text-gray-500">Send your first message.</p>
           </div>
         ) : (
-          messages.map((m) => (
+          groupedMessages.map((m) => (
             <ChatBubble
               key={m._id}
               role={m.role}
               content={m.content}
               timestamp={m.created_at}
+              isFirstOfGroup={m.isFirst}
+              isLastOfGroup={m.isLast}
             />
           ))
         )}
