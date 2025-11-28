@@ -25,8 +25,10 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const composerRef = React.useRef<HTMLDivElement | null>(null);
+  const headerWrapperRef = React.useRef<HTMLDivElement | null>(null);
 
   const [composerHeight, setComposerHeight] = React.useState(120); // default
+  const [headerHeight, setHeaderHeight] = React.useState(0);
 
   const sendMessage = useMutation(api.thread_messages.sendMessage);
   const triggerAssistantReply = useAction(api.assistant.reply);
@@ -42,7 +44,22 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   const issue = useQuery(api.issues.get, { id: issueId as Id<"issues"> });
 
   // ----------------------------------------------
-  // 1. REAL ChatGPT FIX — measure composer height
+  // 1. Measure header height dynamically
+  // ----------------------------------------------
+  React.useLayoutEffect(() => {
+    if (!headerWrapperRef.current) return;
+    const update = () => {
+      setHeaderHeight(headerWrapperRef.current!.offsetHeight);
+    };
+    update();
+
+    const ro = new ResizeObserver(update);
+    ro.observe(headerWrapperRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // ----------------------------------------------
+  // 2. REAL ChatGPT FIX — measure composer height
   // ----------------------------------------------
   React.useLayoutEffect(() => {
     if (!composerRef.current) return;
@@ -163,21 +180,46 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   }
 
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       {/* HEADER */}
-      <div className="sticky top-0 z-20 border-b p-6 bg-white/95 dark:bg-neutral-900/95 backdrop-blur">
-        <h1 className="text-xl font-semibold">{issue.title}</h1>
-        <p className="text-sm text-gray-500">
-          Issue #{issueId.slice(-6)} •{" "}
-          {new Date(issue.created_at).toLocaleDateString()}
-        </p>
+      <div
+        ref={headerWrapperRef}
+        className="
+          fixed top-[max(env(safe-area-inset-top),0px)]
+          left-0 right-0 z-20
+          flex justify-center
+          pointer-events-none
+        "
+      >
+        <div
+          className="
+            pointer-events-auto
+            w-[95%] max-w-3xl 
+            mx-auto mt-4
+            bg-white/85 dark:bg-neutral-900/85
+            backdrop-blur-xl
+            border border-neutral-200/60 dark:border-neutral-700/60
+            shadow-lg shadow-black/10 dark:shadow-black/30
+            rounded-2xl
+            px-5 py-4
+          "
+        >
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{issue.title}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Issue #{issueId.slice(-6)} •{" "}
+            {new Date(issue.created_at).toLocaleDateString()}
+          </p>
+        </div>
       </div>
 
       {/* SCROLL AREA */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 pt-4 space-y-1"
-        style={{ paddingBottom: composerHeight + 24 }} // 👈 REAL FIX
+        className="flex-1 overflow-y-auto overscroll-contain px-4 space-y-1"
+        style={{ 
+          paddingTop: `calc(${headerHeight}px + env(safe-area-inset-top))`,
+          paddingBottom: `calc(${composerHeight}px + env(safe-area-inset-bottom))`
+        }}
       >
         {messages === undefined
           ? [...Array(4)].map((_, i) => <ChatBubbleSkeleton key={i} />)
@@ -205,7 +247,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
       {/* COMPOSER (fixed bottom) */}
       <div
         ref={composerRef}
-        className="fixed bottom-0 w-full border-t bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl p-4 z-30"
+        className="fixed bottom-0 left-0 right-0 z-30 pb-[max(env(safe-area-inset-bottom),16px)] bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl border-t border-neutral-200 dark:border-neutral-700 px-4 pt-3"
       >
         <div className="mx-auto max-w-3xl mb-3">
           <QuickActions onAction={(i) => triggerQuickAction({ threadId: thread._id, instruction: i })} />
@@ -216,7 +258,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
             e.preventDefault();
             void handleSubmit();
           }}
-          className="mx-auto max-w-3xl flex gap-3"
+          className="mx-auto max-w-3xl flex gap-3 items-end"
         >
           <textarea
             ref={textareaRef}
