@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { IconUser, IconRobot } from "@tabler/icons-react";
-import MarkdownRenderer from "./MarkdownRenderer";
+import MarkdownRenderer from "./markdown/MarkdownRenderer";
   
 
 interface ChatBubbleProps {
