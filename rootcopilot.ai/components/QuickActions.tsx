@@ -33,12 +33,12 @@ export default function QuickActions({ onAction }: { onAction: (prompt: string) 
   ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="mb-3 flex flex-wrap gap-2">
+    <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="mb-3 flex items-center justify-center flex-wrap gap-2">
       {actions.map((a) => (
         <button
           key={a.label}
           onClick={() => onAction(a.prompt)}
-          className="flex items-center gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+          className="flex items-center justify-center gap-2 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
         >
           {a.icon}
           {a.label}

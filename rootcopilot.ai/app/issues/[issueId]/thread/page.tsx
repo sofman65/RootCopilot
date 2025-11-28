@@ -9,58 +9,54 @@ import { ChatBubble } from "@/components/ChatBubble";
 import { ChatBubbleSkeleton } from "@/components/ChatBubbleSkeleton";
 import TypingBubble from "@/components/TypingBubble";
 import QuickActions from "@/components/QuickActions";
-
+import BottomFade from "@/components/BottomFade";
+import ScrollToBottomButton from "@/components/ScrollToBottomButton";
 import { IconMessageCircle } from "@tabler/icons-react";
 import { groupMessages } from "@/lib/utils";
 
-export default function ThreadPage({
-  params,
-}: {
-  params: Promise<{ issueId: string }>;
-}) {
+export default function ThreadPage({ params }: { params: Promise<{ issueId: string }> }) {
   const { issueId } = React.use(params);
 
-  // --------------------------------------
-  // STATE
-  // --------------------------------------
   const [input, setInput] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
   const [isAssistantReplying, setIsAssistantReplying] = React.useState(false);
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const creatingRef = React.useRef(false);
+  const [showScrollButton, setShowScrollButton] = React.useState(false);
 
-  // --------------------------------------
-  // CONVEX FUNCTIONS
-  // --------------------------------------
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const composerRef = React.useRef<HTMLDivElement | null>(null);
+
+  const [composerHeight, setComposerHeight] = React.useState(120); // default
+
   const sendMessage = useMutation(api.thread_messages.sendMessage);
   const triggerAssistantReply = useAction(api.assistant.reply);
   const triggerQuickAction = useAction(api.assistant.quickAction);
   const createThread = useMutation(api.threads.create);
+  const creatingRef = React.useRef(false);
 
-  // --------------------------------------
-  // QUERIES
-  // --------------------------------------
-  const thread = useQuery(api.threads.getByIssue, {
-    issueId: issueId as Id<"issues">,
-  });
-
+  const thread = useQuery(api.threads.getByIssue, { issueId: issueId as Id<"issues"> });
   const messages = useQuery(
     api.thread_messages.getByThread,
     thread ? { threadId: thread._id } : "skip"
   );
+  const issue = useQuery(api.issues.get, { id: issueId as Id<"issues"> });
 
-  const issue = useQuery(api.issues.get, {
-    id: issueId as Id<"issues">,
-  });
-  const groupedMessages = React.useMemo(
-    () => (messages ? groupMessages(messages) : []),
-    [messages]
-  );
+  // ----------------------------------------------
+  // 1. REAL ChatGPT FIX — measure composer height
+  // ----------------------------------------------
+  React.useLayoutEffect(() => {
+    if (!composerRef.current) return;
+    const update = () => setComposerHeight(composerRef.current!.offsetHeight);
+    update();
 
-  // --------------------------------------
-  // CREATE THREAD IF DOESN'T EXIST
-  // --------------------------------------
+    const ro = new ResizeObserver(update);
+    ro.observe(composerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // ----------------------------------------------
+  // 2. create thread if missing
+  // ----------------------------------------------
   React.useEffect(() => {
     if (thread === null && !creatingRef.current) {
       creatingRef.current = true;
@@ -70,184 +66,181 @@ export default function ThreadPage({
     }
   }, [thread, issueId, createThread]);
 
-  // --------------------------------------
-  // AUTOSCROLL ON NEW MESSAGES OR REPLY
-  // --------------------------------------
-  React.useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages, isAssistantReplying]);
+  // ----------------------------------------------
+  // Utility: Scroll to bottom
+  // ----------------------------------------------
+  const scrollToBottom = React.useCallback(
+    (behavior: ScrollBehavior = "auto") => {
+      const el = scrollRef.current;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    },
+    []
+  );
 
-  // --------------------------------------
-  // AUTOGROW TEXTAREA
-  // --------------------------------------
+  const updateScrollButton = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+    setShowScrollButton(!atBottom);
+  }, []);
+
+  // ----------------------------------------------
+  // 3. Auto scroll AFTER messages update
+  // ----------------------------------------------
+  React.useEffect(() => {
+    if (!messages) return;
+    const id = requestAnimationFrame(() => {
+      scrollToBottom("auto");
+      updateScrollButton();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [messages, scrollToBottom, updateScrollButton]);
+
+  // Scroll on assistant streaming
+  React.useEffect(() => {
+    if (isAssistantReplying) {
+      const id = requestAnimationFrame(() => {
+        scrollToBottom("smooth");
+        updateScrollButton();
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [isAssistantReplying, scrollToBottom, updateScrollButton]);
+
+  // ----------------------------------------------
+  // 4. Scroll button detection
+  // ----------------------------------------------
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+      setShowScrollButton(!atBottom);
+    };
+
+    el.addEventListener("scroll", update);
+    update();
+
+    return () => el.removeEventListener("scroll", update);
+  }, []);
+
+  // ----------------------------------------------
+  // Auto grow textarea
+  // ----------------------------------------------
   React.useEffect(() => {
     if (!textareaRef.current) return;
     textareaRef.current.style.height = "auto";
-    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
   }, [input]);
 
-  // --------------------------------------
-  // USER SENDS MESSAGE
-  // --------------------------------------
-  const handleSubmit = React.useCallback(async () => {
+  // ----------------------------------------------
+  // Sending logic
+  // ----------------------------------------------
+  const handleSubmit = async () => {
     if (!thread || !input.trim()) return;
 
     setIsSending(true);
     setIsAssistantReplying(true);
 
-    try {
-      await sendMessage({
-        threadId: thread._id,
-        content: input.trim(),
-      });
+    await sendMessage({ threadId: thread._id, content: input.trim() });
+    setInput("");
 
-      setInput("");
+    await triggerAssistantReply({ threadId: thread._id });
+    scrollToBottom("smooth");
+    updateScrollButton();
 
-      // Trigger full streaming assistant response
-      await triggerAssistantReply({
-        threadId: thread._id,
-      });
-    } catch (err) {
-      console.error("Error sending message:", err);
-    } finally {
-      setIsSending(false);
-      setIsAssistantReplying(false);
-    }
-  }, [thread, input, sendMessage, triggerAssistantReply]);
-
-  // --------------------------------------
-  // QUICK ACTION HANDLER
-  // --------------------------------------
-  const handleQuickAction = async (instruction: string) => {
-    if (!thread) return;
-    setIsAssistantReplying(true);
-    try {
-      await triggerQuickAction({
-        threadId: thread._id,
-        instruction,
-      });
-    } finally {
-      setIsAssistantReplying(false);
-    }
+    setIsSending(false);
+    setIsAssistantReplying(false);
   };
 
-  // --------------------------------------
-  // LOADING STATES
-  // --------------------------------------
-  if (thread === undefined || issue === undefined) {
-    return (
-      <div className="flex h-full w-full flex-1 flex-col">
-        <div className="border-b p-6 border-neutral-200 dark:border-neutral-700">
-          <div className="h-6 w-48 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-          <div className="mt-2 h-4 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {[...Array(4)].map((_, i) => (
-            <ChatBubbleSkeleton key={i} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (!thread) {
-    return (
-      <div className="flex flex-col h-full justify-center items-center">
-        <IconMessageCircle className="h-12 w-12 text-gray-400" />
-        <h2 className="mt-4 text-lg font-semibold">Preparing thread…</h2>
-        <p className="text-sm text-gray-500">Creating a conversation…</p>
-      </div>
-    );
-  }
-
-  // --------------------------------------
+  // ----------------------------------------------
   // MAIN UI
-  // --------------------------------------
+  // ----------------------------------------------
+  if (!issue || !thread) {
+    return <div className="p-6">Loading…</div>;
+  }
+
   return (
-    <div className="flex h-full w-full flex-1 flex-col">
+    <div className="flex flex-col h-full w-full">
       {/* HEADER */}
-      <div className="border-b border-neutral-200 dark:border-neutral-700 p-6">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-          {issue?.title}
-        </h1>
-        <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-          Issue #{issueId.slice(-6)} • Created{" "}
-          {issue
-            ? new Date(issue.created_at).toLocaleDateString()
-            : "Unknown date"}
+      <div className="sticky top-0 z-20 border-b p-6 bg-white/95 dark:bg-neutral-900/95 backdrop-blur">
+        <h1 className="text-xl font-semibold">{issue.title}</h1>
+        <p className="text-sm text-gray-500">
+          Issue #{issueId.slice(-6)} •{" "}
+          {new Date(issue.created_at).toLocaleDateString()}
         </p>
       </div>
 
-      {/* MESSAGES */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-1">
-        {messages === undefined ? (
-          [...Array(4)].map((_, i) => <ChatBubbleSkeleton key={i} />)
-        ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full">
-            <IconMessageCircle className="h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium">Start the conversation</h3>
-            <p className="text-sm text-gray-500">Send your first message.</p>
-          </div>
-        ) : (
-          groupedMessages.map((m) => (
-            <ChatBubble
-              key={m._id}
-              role={m.role}
-              content={m.content}
-              timestamp={m.created_at}
-              isFirstOfGroup={m.isFirst}
-              isLastOfGroup={m.isLast}
-            />
-          ))
-        )}
+      {/* SCROLL AREA */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-4 pt-4 space-y-1"
+        style={{ paddingBottom: composerHeight + 24 }} // 👈 REAL FIX
+      >
+        {messages === undefined
+          ? [...Array(4)].map((_, i) => <ChatBubbleSkeleton key={i} />)
+          : groupMessages(messages).map((m) => (
+              <ChatBubble
+                key={m._id}
+                role={m.role}
+                content={m.content}
+                timestamp={m.created_at}
+                isFirstOfGroup={m.isFirst}
+                isLastOfGroup={m.isLast}
+              />
+            ))}
 
-        {/* ASSISTANT TYPING INDICATOR */}
         {isAssistantReplying && <TypingBubble />}
+        <BottomFade />
       </div>
 
-      {/* QUICK ACTIONS */}
-      <div className="border-t border-neutral-200 dark:border-neutral-700 p-4 pb-1">
-        <QuickActions onAction={handleQuickAction} />
-      </div>
+      {/* FLOATING BUTTON */}
+      <ScrollToBottomButton
+        show={showScrollButton}
+        onClick={() => scrollToBottom("smooth")}
+      />
 
-      {/* MESSAGE COMPOSER */}
-      <div className="border-t border-neutral-200 dark:border-neutral-700 p-4">
+      {/* COMPOSER (fixed bottom) */}
+      <div
+        ref={composerRef}
+        className="fixed bottom-0 w-full border-t bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl p-4 z-30"
+      >
+        <div className="mx-auto max-w-3xl mb-3">
+          <QuickActions onAction={(i) => triggerQuickAction({ threadId: thread._id, instruction: i })} />
+        </div>
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void handleSubmit();
           }}
-          className="flex gap-2 items-end"
+          className="mx-auto max-w-3xl flex gap-3"
         >
           <textarea
             ref={textareaRef}
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleSubmit();
-              }
-            }}
+            className="flex-1 resize-none rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Ask about this issue…"
-            className="flex-1 resize-none rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
 
           <button
-            type="submit"
             disabled={!input.trim() || isSending}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-full p-3 bg-blue-600 text-white shadow hover:bg-blue-500 transition"
           >
-            {isSending ? "Sending…" : "Send"}
+            <svg
+              className="h-4 w-4 rotate-45"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeWidth={2} d="M5 12l14-7-7 14-2-5-5-2z" />
+            </svg>
           </button>
         </form>
-
-        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          Enter to send • Shift+Enter for newline
-        </p>
       </div>
     </div>
   );
