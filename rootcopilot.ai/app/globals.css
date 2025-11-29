@@ -134,6 +134,11 @@
 }
 
 @layer components {
+  /* Smooth code block expansion during streaming */
+  pre {
+    transition: max-height 0.25s ease-out;
+  }
+
   .rcp-sidebar a {
     @apply transition-all duration-200 ease-out text-[hsl(var(--rcp-fg))];
   }

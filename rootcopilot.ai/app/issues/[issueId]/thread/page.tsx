@@ -125,31 +125,47 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     setShowScrollButton(!atBottom);
   }, []);
 
-  // --------------------------------------------
-  // AUTO SCROLL ON NEW MESSAGES (ChatGPT-style)
-  // --------------------------------------------
+  // --- USER NEAR BOTTOM CHECK ---
+  const isUserNearBottom = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return false;
+
+    return el.scrollHeight - (el.scrollTop + el.clientHeight) < 120;
+  }, []);
+
+  // --- NEW MESSAGES SCROLL ---
   React.useEffect(() => {
     if (!messages) return;
 
     const raf = requestAnimationFrame(() => {
-      scrollToBottom("auto");
+      if (isUserNearBottom()) {
+        scrollToBottom("smooth");
+      }
       updateScrollButton();
     });
 
     return () => cancelAnimationFrame(raf);
-  }, [messages, scrollToBottom, updateScrollButton]);
+  }, [messages, isUserNearBottom, scrollToBottom, updateScrollButton]);
 
-  // --------------------------------------------
-  // STREAMING SCROLL (typing indicator & streaming)
-  // --------------------------------------------
+  // --- STREAMING SCROLLING (ChatGPT style) ---
   React.useEffect(() => {
     if (!isAssistantReplying) return;
+
     const raf = requestAnimationFrame(() => {
-      scrollToBottom("smooth");
+      if (isUserNearBottom()) {
+        scrollToBottom("smooth");
+      }
       updateScrollButton();
     });
+
     return () => cancelAnimationFrame(raf);
-  }, [isAssistantReplying, messages, scrollToBottom, updateScrollButton]);
+  }, [
+    isAssistantReplying,
+    messages,
+    isUserNearBottom,
+    scrollToBottom,
+    updateScrollButton,
+  ]);
 
   // --------------------------------------------
   // DETECT SCROLL BUTTON SHOW/HIDE
@@ -305,6 +321,9 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
               timestamp={m.created_at}
               isFirstOfGroup={m.isFirst}
               isLastOfGroup={m.isLast}
+              isStreaming={
+                isAssistantReplying && i === realIndex && m.role === "assistant"
+              }
               quickActions={i === realIndex ? actions : undefined}
               onQuickAction={handleQuickAction}
             />

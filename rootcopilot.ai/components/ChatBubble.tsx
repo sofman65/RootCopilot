@@ -12,6 +12,10 @@ interface ChatBubbleProps {
 
   isFirstOfGroup?: boolean;
   isLastOfGroup?: boolean;
+
+  isStreaming?: boolean;
+  quickActions?: string[];
+  onQuickAction?: (instruction: string) => void;
 }
 
 export function ChatBubble({
@@ -20,13 +24,18 @@ export function ChatBubble({
   timestamp,
   isFirstOfGroup = true,
   isLastOfGroup = true,
+  isStreaming = false,
+  quickActions,
+  onQuickAction,
 }: ChatBubbleProps) {
   const isUser = role === "user";
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      layout="position"
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 150, damping: 20, duration: 0.2 }}
       className={cn(
         "flex w-full",
         isUser ? "justify-end" : "justify-start",
@@ -40,7 +49,11 @@ export function ChatBubble({
         </div>
       )}
 
-      <div
+      <motion.div
+        layout="position"
+        initial={{ opacity: 0.3 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.2 }}
         className={cn(
           "max-w-[80%] px-4 py-3 text-sm rounded-2xl",
           isUser
@@ -55,7 +68,15 @@ export function ChatBubble({
           !isLastOfGroup && !isUser && "rounded-bl-none"
         )}
       >
-        <MarkdownRenderer>{content}</MarkdownRenderer>
+        <div className="relative">
+          <span className="transition-opacity duration-75 ease-out">
+            <MarkdownRenderer>{content}</MarkdownRenderer>
+          </span>
+
+          {isStreaming && (
+            <span className="ml-1 animate-pulse opacity-70">▌</span>
+          )}
+        </div>
 
         {/* Timestamp only on last message of the group */}
         {timestamp && isLastOfGroup && (
@@ -66,7 +87,29 @@ export function ChatBubble({
             {new Date(timestamp).toLocaleTimeString()}
           </div>
         )}
-      </div>
+
+        {/* Quick Actions - only for assistant messages */}
+        {role === "assistant" && quickActions && quickActions.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {quickActions.map((action) => (
+              <button
+                key={action}
+                onClick={() => onQuickAction?.(action)}
+                className="
+                  text-xs px-3 py-1 rounded-full 
+                  border border-neutral-300 dark:border-neutral-700
+                  bg-neutral-100 dark:bg-neutral-800 
+                  text-neutral-700 dark:text-neutral-300
+                  hover:bg-neutral-200 dark:hover:bg-neutral-700
+                  transition
+                "
+              >
+                {action}
+              </button>
+            ))}
+          </div>
+        )}
+      </motion.div>
 
       {/* User avatar on first message of the group */}
       {isUser && isFirstOfGroup && (
