@@ -7,9 +7,29 @@ import { api } from "@/convex/_generated/api";
 import { IconSearch, IconMessages } from "@tabler/icons-react";
 
 export default function SearchPage() {
+  const [raw, setRaw] = React.useState("");
   const [term, setTerm] = React.useState("");
+  React.useEffect(() => {
+    const id = setTimeout(() => setTerm(raw), 300);
+    return () => clearTimeout(id);
+  }, [raw]);
   const router = useRouter();
   const results = useQuery(api.search.searchEverything, term.trim() ? { term } : "skip");
+
+  const highlight = (text: string, q: string) => {
+    if (!q.trim()) return text;
+    const safe = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const parts = text.split(new RegExp(`(${safe})`, "gi"));
+    return parts.map((p, i) =>
+      p.toLowerCase() === q.toLowerCase() ? (
+        <span key={i} className="bg-yellow-200/70 dark:bg-yellow-500/40 rounded px-0.5">
+          {p}
+        </span>
+      ) : (
+        <React.Fragment key={i}>{p}</React.Fragment>
+      )
+    );
+  };
 
   const onOpenIssue = (issueId?: string) => {
     if (!issueId) return;
@@ -22,8 +42,8 @@ export default function SearchPage() {
         <div className="mx-auto max-w-3xl flex items-center gap-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-4 py-3 shadow-sm">
           <IconSearch className="h-4 w-4 text-neutral-500" />
           <input
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
             placeholder="Search issues or messages…"
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-neutral-500 dark:text-neutral-100"
           />
@@ -43,18 +63,21 @@ export default function SearchPage() {
             {results && results.issues.length === 0 && (
               <div className="text-sm text-neutral-500">No issues found.</div>
             )}
-            {results?.issues.map((i) => (
+            {results?.issues
+              .slice()
+              .sort((a, b) => b.created_at - a.created_at)
+              .map((i) => (
               <button
                 key={i._id}
                 onClick={() => onOpenIssue(i._id)}
                 className="w-full text-left rounded-lg border border-neutral-200 dark:border-neutral-800 px-3 py-2 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
               >
-                <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                  {i.title}
-                </div>
-                <div className="text-xs text-neutral-500">
-                  {i.environment} • #{String(i._id).slice(-6)}
-                </div>
+                  <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                    {highlight(i.title, term)}
+                  </div>
+                  <div className="text-xs text-neutral-500">
+                    {i.breadcrumb ?? i.environment} • #{String(i._id).slice(-6)}
+                  </div>
               </button>
             ))}
           </div>
@@ -72,7 +95,10 @@ export default function SearchPage() {
             {results && results.messages.length === 0 && (
               <div className="text-sm text-neutral-500">No messages found.</div>
             )}
-            {results?.messages.map((m) => (
+            {results?.messages
+              .slice()
+              .sort((a, b) => b.created_at - a.created_at)
+              .map((m) => (
               <button
                 key={m._id}
                 onClick={() => onOpenIssue(m.issue_id)}
@@ -83,16 +109,34 @@ export default function SearchPage() {
                 </div>
                 <div className="flex-1">
                   <div className="text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2">
-                    {m.content}
+                    {highlight(m.content, term)}
                   </div>
                   <div className="text-xs text-neutral-500">
-                    {m.issue_title ?? "Unknown issue"} • {m.environment} • #{m.issue_id ? String(m.issue_id).slice(-6) : "—"}
+                    {m.breadcrumb ?? m.environment} • {m.issue_title ?? "Unknown issue"}
                   </div>
                 </div>
               </button>
             ))}
           </div>
         </section>
+
+        {/* Empty suggestions */}
+        {results &&
+          results.issues.length === 0 &&
+          results.messages.length === 0 &&
+          term.trim() && (
+            <div className="max-w-3xl mx-auto text-sm text-neutral-500 space-y-2">
+              <div>No results found.</div>
+              <div className="font-medium text-neutral-700 dark:text-neutral-200">
+                Try asking Copilot:
+              </div>
+              <ul className="list-disc list-inside space-y-1">
+                <li>{`Search payment gateway logs for errors about "${term}"`}</li>
+                <li>{`Summarize issue history related to "${term}"`}</li>
+                <li>{`What logs should I check for "${term}" failures?`}</li>
+              </ul>
+            </div>
+          )}
       </div>
     </div>
   );
