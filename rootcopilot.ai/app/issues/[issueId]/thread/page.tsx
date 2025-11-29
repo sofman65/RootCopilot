@@ -238,7 +238,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   // UI
   // --------------------------------------------
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden">
+    <div className="flex flex-col h-full w-full overflow-hidden">
       
       {/* HEADER */}
       <div
@@ -279,8 +279,25 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
       >
         {messages === undefined ? (
           [...Array(4)].map((_, i) => <ChatBubbleSkeleton key={i} />)
-        ) : (
-          groupMessages(messages).map((m) => (
+        ) : (() => {
+          const grouped = groupMessages(messages);
+          
+          // Find the last assistant message index
+          const lastAssistantIndex = [...grouped].reverse().findIndex(
+            (m) => m.role === "assistant"
+          );
+          const realIndex =
+            lastAssistantIndex === -1 ? -1 : grouped.length - 1 - lastAssistantIndex;
+
+          // Quick actions to show on last assistant message
+          const actions = [
+            "Summarize",
+            "Suggest Fix",
+            "Debug Frontend",
+            "Explain Root Cause",
+          ];
+
+          return grouped.map((m, i) => (
             <ChatBubble
               key={m._id}
               role={m.role}
@@ -288,9 +305,11 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
               timestamp={m.created_at}
               isFirstOfGroup={m.isFirst}
               isLastOfGroup={m.isLast}
+              quickActions={i === realIndex ? actions : undefined}
+              onQuickAction={handleQuickAction}
             />
-          ))
-        )}
+          ));
+        })()}
 
         {isAssistantReplying && <TypingBubble />}
         <BottomFade />
