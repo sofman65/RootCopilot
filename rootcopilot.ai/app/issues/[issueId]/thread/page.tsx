@@ -11,69 +11,86 @@ import TypingBubble from "@/components/TypingBubble";
 import QuickActions from "@/components/QuickActions";
 import BottomFade from "@/components/BottomFade";
 import ScrollToBottomButton from "@/components/ScrollToBottomButton";
-import { IconMessageCircle } from "@tabler/icons-react";
 import { groupMessages } from "@/lib/utils";
 
 export default function ThreadPage({ params }: { params: Promise<{ issueId: string }> }) {
   const { issueId } = React.use(params);
 
+  // --------------------------------------------
+  // STATE + REFS
+  // --------------------------------------------
   const [input, setInput] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
   const [isAssistantReplying, setIsAssistantReplying] = React.useState(false);
   const [showScrollButton, setShowScrollButton] = React.useState(false);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const headerRef = React.useRef<HTMLDivElement | null>(null);
   const composerRef = React.useRef<HTMLDivElement | null>(null);
-  const headerWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
 
-  const [composerHeight, setComposerHeight] = React.useState(120); // default
   const [headerHeight, setHeaderHeight] = React.useState(0);
+  const [composerHeight, setComposerHeight] = React.useState(120);
 
-  const sendMessage = useMutation(api.thread_messages.sendMessage);
-  const triggerAssistantReply = useAction(api.assistant.reply);
-  const triggerQuickAction = useAction(api.assistant.quickAction);
-  const createThread = useMutation(api.threads.create);
   const creatingRef = React.useRef(false);
 
-  const thread = useQuery(api.threads.getByIssue, { issueId: issueId as Id<"issues"> });
+  // --------------------------------------------
+  // CONVEX
+  // --------------------------------------------
+  const sendMessage = useMutation(api.thread_messages.sendMessage);
+  const sendQuickActionUserMessage = useMutation(
+    api.thread_messages.sendQuickActionUserMessage
+  );
+  const triggerReply = useAction(api.assistant.reply);
+  const triggerQuickAction = useAction(api.assistant.quickAction);
+  const createThread = useMutation(api.threads.create);
+
+  const thread = useQuery(api.threads.getByIssue, {
+    issueId: issueId as Id<"issues">,
+  });
+
   const messages = useQuery(
     api.thread_messages.getByThread,
     thread ? { threadId: thread._id } : "skip"
   );
-  const issue = useQuery(api.issues.get, { id: issueId as Id<"issues"> });
 
-  // ----------------------------------------------
-  // 1. Measure header height dynamically
-  // ----------------------------------------------
+  const issue = useQuery(api.issues.get, {
+    id: issueId as Id<"issues">,
+  });
+
+  // --------------------------------------------
+  // MEASURE HEADER HEIGHT
+  // --------------------------------------------
   React.useLayoutEffect(() => {
-    if (!headerWrapperRef.current) return;
-    const update = () => {
-      setHeaderHeight(headerWrapperRef.current!.offsetHeight);
-    };
+    if (!headerRef.current) return;
+
+    const update = () => setHeaderHeight(headerRef.current!.offsetHeight);
     update();
 
     const ro = new ResizeObserver(update);
-    ro.observe(headerWrapperRef.current);
+    ro.observe(headerRef.current);
+
     return () => ro.disconnect();
   }, []);
 
-  // ----------------------------------------------
-  // 2. REAL ChatGPT FIX — measure composer height
-  // ----------------------------------------------
+  // --------------------------------------------
+  // MEASURE COMPOSER HEIGHT
+  // --------------------------------------------
   React.useLayoutEffect(() => {
     if (!composerRef.current) return;
+
     const update = () => setComposerHeight(composerRef.current!.offsetHeight);
     update();
 
     const ro = new ResizeObserver(update);
     ro.observe(composerRef.current);
+
     return () => ro.disconnect();
   }, []);
 
-  // ----------------------------------------------
-  // 2. create thread if missing
-  // ----------------------------------------------
+  // --------------------------------------------
+  // CREATE THREAD IF MISSING
+  // --------------------------------------------
   React.useEffect(() => {
     if (thread === null && !creatingRef.current) {
       creatingRef.current = true;
@@ -83,14 +100,17 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     }
   }, [thread, issueId, createThread]);
 
-  // ----------------------------------------------
-  // Utility: Scroll to bottom
-  // ----------------------------------------------
+  // --------------------------------------------
+  // SCROLL HELPERS
+  // --------------------------------------------
   const scrollToBottom = React.useCallback(
     (behavior: ScrollBehavior = "auto") => {
       const el = scrollRef.current;
       if (!el) return;
-      el.scrollTo({ top: el.scrollHeight, behavior });
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior,
+      });
     },
     []
   );
@@ -98,73 +118,82 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   const updateScrollButton = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+
+    const atBottom =
+      el.scrollTop + el.clientHeight >= el.scrollHeight - 12;
+
     setShowScrollButton(!atBottom);
   }, []);
 
-  // ----------------------------------------------
-  // 3. Auto scroll AFTER messages update
-  // ----------------------------------------------
+  // --------------------------------------------
+  // AUTO SCROLL ON NEW MESSAGES (ChatGPT-style)
+  // --------------------------------------------
   React.useEffect(() => {
     if (!messages) return;
-    const id = requestAnimationFrame(() => {
+
+    const raf = requestAnimationFrame(() => {
       scrollToBottom("auto");
       updateScrollButton();
     });
-    return () => cancelAnimationFrame(id);
+
+    return () => cancelAnimationFrame(raf);
   }, [messages, scrollToBottom, updateScrollButton]);
 
-  // Scroll on assistant streaming
+  // --------------------------------------------
+  // STREAMING SCROLL (typing indicator & streaming)
+  // --------------------------------------------
   React.useEffect(() => {
-    if (isAssistantReplying) {
-      const id = requestAnimationFrame(() => {
-        scrollToBottom("smooth");
-        updateScrollButton();
-      });
-      return () => cancelAnimationFrame(id);
-    }
-  }, [isAssistantReplying, scrollToBottom, updateScrollButton]);
+    if (!isAssistantReplying) return;
+    const raf = requestAnimationFrame(() => {
+      scrollToBottom("smooth");
+      updateScrollButton();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [isAssistantReplying, messages, scrollToBottom, updateScrollButton]);
 
-  // ----------------------------------------------
-  // 4. Scroll button detection
-  // ----------------------------------------------
+  // --------------------------------------------
+  // DETECT SCROLL BUTTON SHOW/HIDE
+  // --------------------------------------------
   React.useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
-    const update = () => {
-      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
-      setShowScrollButton(!atBottom);
-    };
+    const handler = () => updateScrollButton();
 
-    el.addEventListener("scroll", update);
-    update();
+    el.addEventListener("scroll", handler);
+    handler(); // initial check
 
-    return () => el.removeEventListener("scroll", update);
-  }, []);
+    return () => el.removeEventListener("scroll", handler);
+  }, [updateScrollButton]);
 
-  // ----------------------------------------------
-  // Auto grow textarea
-  // ----------------------------------------------
+  // --------------------------------------------
+  // TEXTAREA AUTO-GROW
+  // --------------------------------------------
   React.useEffect(() => {
     if (!textareaRef.current) return;
-    textareaRef.current.style.height = "auto";
-    textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+    const t = textareaRef.current;
+    t.style.height = "auto";
+    t.style.height = t.scrollHeight + "px";
   }, [input]);
 
-  // ----------------------------------------------
-  // Sending logic
-  // ----------------------------------------------
+  // --------------------------------------------
+  // SEND MESSAGE
+  // --------------------------------------------
   const handleSubmit = async () => {
     if (!thread || !input.trim()) return;
 
     setIsSending(true);
     setIsAssistantReplying(true);
 
-    await sendMessage({ threadId: thread._id, content: input.trim() });
+    await sendMessage({
+      threadId: thread._id,
+      content: input.trim(),
+    });
+
     setInput("");
 
-    await triggerAssistantReply({ threadId: thread._id });
+    await triggerReply({ threadId: thread._id });
+
     scrollToBottom("smooth");
     updateScrollButton();
 
@@ -172,39 +201,66 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     setIsAssistantReplying(false);
   };
 
-  // ----------------------------------------------
-  // MAIN UI
-  // ----------------------------------------------
+  // --------------------------------------------
+  // QUICK ACTION HANDLER
+  // --------------------------------------------
+  const handleQuickAction = async (instruction: string) => {
+    if (!thread) return;
+
+    setIsAssistantReplying(true);
+
+    // 1. First create a user-style message
+    await sendQuickActionUserMessage({
+      threadId: thread._id,
+      instruction,
+    });
+
+    // 2. Then trigger the assistant reply
+    await triggerQuickAction({
+      threadId: thread._id,
+      instruction,
+    });
+
+    scrollToBottom("smooth");
+    updateScrollButton();
+
+    setIsAssistantReplying(false);
+  };
+
+  // --------------------------------------------
+  // LOADING STATES
+  // --------------------------------------------
   if (!issue || !thread) {
     return <div className="p-6">Loading…</div>;
   }
 
+  // --------------------------------------------
+  // UI
+  // --------------------------------------------
   return (
-    <div className="flex flex-col h-full w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <div className="flex flex-col h-screen w-full overflow-hidden">
+      
       {/* HEADER */}
       <div
-        ref={headerWrapperRef}
+        ref={headerRef}
         className="
-          fixed top-[max(env(safe-area-inset-top),0px)]
-          left-0 right-0 z-20
-          flex justify-center
+          fixed top-0 left-0 right-0 z-20 flex justify-center
           pointer-events-none
         "
       >
         <div
           className="
-            pointer-events-auto
-            w-[95%] max-w-3xl 
-            mx-auto mt-4
-            bg-white/85 dark:bg-neutral-900/85
-            backdrop-blur-xl
+            pointer-events-auto w-[95%] max-w-3xl mx-auto mt-4
+            bg-white/85 dark:bg-neutral-900/85 backdrop-blur-xl
             border border-neutral-200/60 dark:border-neutral-700/60
             shadow-lg shadow-black/10 dark:shadow-black/30
-            rounded-2xl
-            px-5 py-4
+            rounded-2xl px-5 py-4
           "
         >
-          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{issue.title}</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            {issue.title}
+          </h1>
+
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             Issue #{issueId.slice(-6)} •{" "}
             {new Date(issue.created_at).toLocaleDateString()}
@@ -215,24 +271,26 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
       {/* SCROLL AREA */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto overscroll-contain px-4 space-y-1"
-        style={{ 
-          paddingTop: `calc(${headerHeight}px + env(safe-area-inset-top))`,
-          paddingBottom: `calc(${composerHeight}px + env(safe-area-inset-bottom))`
+        className="flex-1 overflow-y-auto overscroll-contain px-4 space-y-2"
+        style={{
+          paddingTop: headerHeight + 16,
+          paddingBottom: composerHeight + 24,
         }}
       >
-        {messages === undefined
-          ? [...Array(4)].map((_, i) => <ChatBubbleSkeleton key={i} />)
-          : groupMessages(messages).map((m) => (
-              <ChatBubble
-                key={m._id}
-                role={m.role}
-                content={m.content}
-                timestamp={m.created_at}
-                isFirstOfGroup={m.isFirst}
-                isLastOfGroup={m.isLast}
-              />
-            ))}
+        {messages === undefined ? (
+          [...Array(4)].map((_, i) => <ChatBubbleSkeleton key={i} />)
+        ) : (
+          groupMessages(messages).map((m) => (
+            <ChatBubble
+              key={m._id}
+              role={m.role}
+              content={m.content}
+              timestamp={m.created_at}
+              isFirstOfGroup={m.isFirst}
+              isLastOfGroup={m.isLast}
+            />
+          ))
+        )}
 
         {isAssistantReplying && <TypingBubble />}
         <BottomFade />
@@ -244,34 +302,48 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
         onClick={() => scrollToBottom("smooth")}
       />
 
-      {/* COMPOSER (fixed bottom) */}
+      {/* COMPOSER */}
       <div
         ref={composerRef}
-        className="fixed bottom-0 left-0 right-0 z-30 pb-[max(env(safe-area-inset-bottom),16px)] bg-white/90 dark:bg-neutral-900/90 backdrop-blur-xl border-t border-neutral-200 dark:border-neutral-700 px-4 pt-3"
+        className="
+          fixed bottom-0 left-0 right-0 z-30
+          bg-white/90 dark:bg-neutral-900/90 
+          backdrop-blur-xl border-t border-neutral-200 dark:border-neutral-700
+          px-4 pt-3 pb-4
+        "
       >
         <div className="mx-auto max-w-3xl mb-3">
-          <QuickActions onAction={(i) => triggerQuickAction({ threadId: thread._id, instruction: i })} />
+          <QuickActions onAction={handleQuickAction} />
         </div>
 
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void handleSubmit();
+            handleSubmit();
           }}
-          className="mx-auto max-w-3xl flex gap-3 items-end"
+          className="mx-auto max-w-3xl flex gap-3 items-center"
         >
           <textarea
             ref={textareaRef}
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            className="flex-1 resize-none rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Ask about this issue…"
+            className="
+              flex-1 resize-none rounded-2xl border border-neutral-300 
+              dark:border-neutral-700 bg-white dark:bg-neutral-800
+              px-4 py-3 text-sm shadow-sm
+              focus:outline-none focus:ring-2 focus:ring-blue-500
+            "
           />
 
           <button
+            type="submit"
             disabled={!input.trim() || isSending}
-            className="rounded-full p-3 bg-blue-600 text-white shadow hover:bg-blue-500 transition"
+            className="
+              rounded-full p-3 bg-blue-600 text-white shadow 
+              hover:bg-blue-500 transition disabled:opacity-50
+            "
           >
             <svg
               className="h-4 w-4 rotate-45"

@@ -11,17 +11,17 @@ export default function RootContentWrapper({
   const { open } = useSidebar();
 
   return (
-    <motion.div
+    <motion.main
       animate={{
-        paddingLeft: open ? 300 : 100, 
+        marginLeft: open ? 300 : 100, 
       }}
       transition={{
         duration: 0.25,
         ease: "easeInOut",
       }}
-      className="min-h-screen w-full"
+      className="flex-1 h-screen flex flex-col overflow-hidden"
     >
       {children}
-    </motion.div>
+    </motion.main>
   );
 }

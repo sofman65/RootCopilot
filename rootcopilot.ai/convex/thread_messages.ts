@@ -52,3 +52,18 @@ export const appendToMessage = mutation({
     });
   },
 });
+
+export const sendQuickActionUserMessage = mutation({
+  args: {
+    threadId: v.id("threads"),
+    instruction: v.string(),
+  },
+  handler: async (ctx, { threadId, instruction }) => {
+    return await ctx.db.insert("thread_messages", {
+      thread_id: threadId,
+      role: "user",
+      content: instruction,
+      created_at: Date.now(),
+    });
+  },
+});

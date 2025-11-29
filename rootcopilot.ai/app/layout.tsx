@@ -37,7 +37,7 @@ export default function RootLayout({
             <ConvexClientProvider>
                {/* WRAP SIDEBAR + CONTENT */}
                <SidebarProvider>
-                <div className="min-h-screen w-full relative flex bg-white dark:bg-neutral-900 overflow-hidden">
+                <div className="h-screen w-full flex bg-white dark:bg-neutral-900 overflow-hidden">
                   <AppSidebar />
                   <RootContentWrapper>
                     {children}
