@@ -93,14 +93,9 @@ export const reply = action({
         const ragResults = await ctx.runAction(api.rag.search, {
           query: lastUserContent,
           limit: 5,
-          threshold: 0.15,
+          threshold: 0.3,
         });
-        ragContext = ragResults
-          .map(
-            (r: any) =>
-              `● Source: ${r.doc?.name ?? "Unknown"}\n${r.chunk}`
-          )
-          .join("\n\n");
+        ragContext = ragResults.text || "";
       } catch (err) {
         console.error("RAG search failed", err);
       }

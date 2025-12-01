@@ -1,80 +1,37 @@
-import { action, query } from "./_generated/server";
+import { components } from "./_generated/api";
+import { RAG } from "@convex-dev/rag";
+import { openai } from "@ai-sdk/openai";
+import { action } from "./_generated/server";
 import { v } from "convex/values";
 
-const MODEL = "text-embedding-3-small";
-const OPENAI_URL = "https://api.openai.com/v1/embeddings";
+// Initialize RAG with OpenAI embeddings
+export const rag = new RAG(components.rag, {
+  textEmbeddingModel: openai.embedding("text-embedding-3-small"),
+  embeddingDimension: 1536,
+});
 
-async function embed(text: string, apiKey: string) {
-  const res = await fetch(OPENAI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ model: MODEL, input: text }),
-  });
-  if (!res.ok) {
-    throw new Error(`Embedding failed: ${res.status} ${await res.text()}`);
-  }
-  const json = await res.json();
-  return json.data[0].embedding as number[];
-}
-
-function chunkText(text: string, size = 400) {
-  const sentences = text.split(/(?<=[.!?])\s+/);
-  const chunks: string[] = [];
-  let current = "";
-  for (const s of sentences) {
-    if ((current + " " + s).trim().length > size) {
-      if (current.trim()) chunks.push(current.trim());
-      current = s;
-    } else {
-      current += (current ? " " : "") + s;
-    }
-  }
-  if (current.trim()) chunks.push(current.trim());
-  return chunks;
-}
-
-function cosine(a: number[], b: number[]) {
-  const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
-  const na = Math.sqrt(a.reduce((s, ai) => s + ai * ai, 0));
-  const nb = Math.sqrt(b.reduce((s, bi) => s + bi * bi, 0));
-  if (na === 0 || nb === 0) return 0;
-  return dot / (na * nb);
-}
-
+// ------------------------------
+// Add Document (text-based)
+// ------------------------------
 export const addDocument = action({
   args: {
     name: v.string(),
-    type: v.union(v.literal("pdf"), v.literal("text"), v.literal("log"), v.literal("markdown")),
     text: v.string(),
     namespace: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
-
-    const docId = await ctx.db.insert("rag_documents", {
-      name: args.name,
-      type: args.type,
-      namespace: args.namespace,
-      created_at: Date.now(),
+  handler: async (ctx, { name, text, namespace }) => {
+    const { entryId } = await rag.add(ctx, {
+      namespace: namespace ?? "global",
+      text,
+      title: name,
     });
-
-    const chunks = chunkText(args.text);
-    for (const chunk of chunks) {
-      const embedding = await embed(chunk, apiKey);
-      await ctx.db.insert("rag_chunks", {
-        doc_id: docId,
-        chunk,
-        embedding,
-      });
-    }
-    return docId;
+    return { entryId };
   },
 });
 
+// ------------------------------
+// Search
+// ------------------------------
 export const search = action({
   args: {
     query: v.string(),
@@ -82,44 +39,95 @@ export const search = action({
     limit: v.optional(v.number()),
     threshold: v.optional(v.number()),
   },
-  handler: async (ctx, { query, namespace, limit, threshold }) => {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("Missing OPENAI_API_KEY");
-    const qEmbed = await embed(query, apiKey);
-
-    const docs = await ctx.db.query("rag_documents").collect();
-    const docById = new Map(docs.map((d) => [d._id, d]));
-
-    const chunks = await ctx.db.query("rag_chunks").collect();
-    const filtered = chunks.filter((c) => {
-      if (!namespace) return true;
-      const doc = docById.get(c.doc_id);
-      return doc?.namespace === namespace;
+  handler: async (ctx, { query: q, namespace, limit, threshold }) => {
+    const { results, text, entries, usage } = await rag.search(ctx, {
+      namespace: namespace ?? "global",
+      query: q,
+      limit: limit ?? 10,
+      vectorScoreThreshold: threshold ?? 0.3,
     });
 
-    const scored = filtered
-      .map((c) => ({
-        ...c,
-        score: cosine(qEmbed, c.embedding),
-      }))
-      .filter((c) => c.score > (threshold ?? 0.15))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit ?? 10);
-
-    return scored.map((c) => {
-      const doc = docById.get(c.doc_id);
-      return {
-        chunk: c.chunk,
-        score: c.score,
-        doc: doc ? { id: doc._id, name: doc.name, type: doc.type, namespace: doc.namespace } : null,
-      };
-    });
+    return {
+      results,
+      text,
+      entries,
+      usage,
+    };
   },
 });
 
-export const listDocs = query({
-  args: {},
-  handler: async (ctx) => {
-    return ctx.db.query("rag_documents").order("desc").collect();
+// ------------------------------
+// Ask - RAG-powered Q&A
+// ------------------------------
+export const ask = action({
+  args: {
+    question: v.string(),
+    namespace: v.optional(v.string()),
+  },
+  handler: async (ctx, { question, namespace }) => {
+    const { text: answer, context } = await rag.generateText(ctx, {
+      search: {
+        namespace: namespace ?? "global",
+        limit: 10,
+        vectorScoreThreshold: 0.3,
+      },
+      prompt: question,
+      model: openai.chat("gpt-4o-mini"),
+    });
+
+    return {
+      answer,
+      contexts: context.results.map((r) => ({
+        chunk: r.content.map((c) => c.text).join("\n"),
+        score: r.score,
+        doc: {
+          name: context.entries.find((e) => e.entryId === r.entryId)?.title,
+          namespace: namespace ?? "global",
+        },
+      })),
+    };
+  },
+});
+
+// ------------------------------
+// List Entries (for sidebar)
+// ------------------------------
+export const listEntries = action({
+  args: {
+    namespace: v.optional(v.string()),
+  },
+  handler: async (ctx, { namespace }) => {
+    const ns = namespace ?? "global";
+    // Get the namespace first
+    const namespaceData = await rag.getNamespace(ctx, { namespace: ns });
+    
+    if (!namespaceData) {
+      return [];
+    }
+    
+    const { page } = await rag.list(ctx, {
+      namespaceId: namespaceData.namespaceId,
+      status: "ready",
+      paginationOpts: { cursor: null, numItems: 50 },
+    });
+
+    return page.map((entry) => ({
+      entryId: entry.entryId,
+      title: entry.title,
+      namespace: ns,
+      createdAt: Date.now(), // Entry doesn't have createdAt, using current time as placeholder
+    }));
+  },
+});
+
+// ------------------------------
+// Delete Entry
+// ------------------------------
+export const deleteEntry = action({
+  args: {
+    entryId: v.string(),
+  },
+  handler: async (ctx, { entryId }) => {
+    await rag.delete(ctx, { entryId: entryId as `${string}:${string}` & { _: "EntryId" } });
   },
 });
