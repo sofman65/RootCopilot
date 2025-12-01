@@ -1,12 +1,27 @@
 "use client";
 
 import * as React from "react";
-import { useAction } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useOrganization } from "@clerk/nextjs";
+import { Id } from "@/convex/_generated/dataModel";
 
 import { ChatBubble } from "@/components/ChatBubble";
 import TypingBubble from "@/components/TypingBubble";
-import { IconSparkles, IconUpload, IconInfoCircle, IconBook2, IconRefresh } from "@tabler/icons-react";
+import { 
+  IconSparkles, 
+  IconUpload, 
+  IconInfoCircle, 
+  IconBook2, 
+  IconRefresh,
+  IconFile,
+  IconFileTypePdf,
+  IconFileTypeDoc,
+  IconPhoto,
+  IconCheck,
+  IconLoader,
+  IconAlertCircle,
+} from "@tabler/icons-react";
 
 // ------------------------------
 // TYPES
@@ -26,10 +41,18 @@ interface RagEntry {
   createdAt?: number;
 }
 
+interface UploadedFile {
+  id: Id<"files">;
+  name: string;
+  status: "pending" | "processing" | "ready" | "error";
+}
+
 // ------------------------------
 // COMPONENT
 // ------------------------------
 export default function CopilotPage() {
+  const { organization } = useOrganization();
+  
   // CHAT
   const [input, setInput] = React.useState("");
   const [messages, setMessages] = React.useState<LocalMessage[]>([]);
@@ -47,6 +70,14 @@ export default function CopilotPage() {
   const addDoc = useAction(api.rag.addDocument);
   const ask = useAction(api.rag.ask);
   const listEntries = useAction(api.rag.listEntries);
+  const processFile = useAction(api.rag.processFile);
+
+  // FILE MUTATIONS
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const saveFile = useMutation(api.files.saveFile);
+
+  // FILES LIST
+  const files = useQuery(api.files.listFiles, {});
 
   // INDEXED DOCS LIST (fetched via action)
   const [docs, setDocs] = React.useState<RagEntry[]>([]);
@@ -56,9 +87,12 @@ export default function CopilotPage() {
   const [namespace, setNamespace] = React.useState("");
   const [uploading, setUploading] = React.useState(false);
   const [uploadStatus, setUploadStatus] = React.useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = React.useState<UploadedFile[]>([]);
 
   // Fetch docs on mount and after uploads
   const fetchDocs = React.useCallback(async () => {
+    if (!organization) return;
+    
     setLoadingDocs(true);
     try {
       const entries = await listEntries({ namespace: namespace || undefined });
@@ -68,12 +102,14 @@ export default function CopilotPage() {
     } finally {
       setLoadingDocs(false);
     }
-  }, [listEntries, namespace]);
+  }, [listEntries, namespace, organization]);
 
   React.useEffect(() => {
-    fetchDocs();
+    if (organization) {
+      fetchDocs();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [organization]);
 
   // ------------------------------
   // UI AUTO EFFECTS
@@ -138,38 +174,138 @@ export default function CopilotPage() {
   };
 
   // ------------------------------
-  // FILE INGESTION
+  // FILE UPLOAD & PROCESSING
   // ------------------------------
-  const handleFiles = async (files: FileList | null) => {
-    if (!files) return;
+  const handleFiles = async (fileList: FileList | null) => {
+    if (!fileList || !organization) return;
 
     setUploading(true);
     setUploadStatus(null);
+    const newUploadedFiles: UploadedFile[] = [];
 
-    let count = 0;
+    for (const f of Array.from(fileList)) {
+      try {
+        // Check if it's a text file that can be read directly
+        const isTextFile = 
+          f.type.startsWith("text/") ||
+          f.name.endsWith(".txt") ||
+          f.name.endsWith(".md") ||
+          f.name.endsWith(".mdx") ||
+          f.name.endsWith(".json") ||
+          f.name.endsWith(".csv") ||
+          f.name.endsWith(".xml") ||
+          f.name.endsWith(".yaml") ||
+          f.name.endsWith(".yml") ||
+          f.name.endsWith(".log");
 
-    for (const f of Array.from(files)) {
-      const txt = await f.text();
-      if (!txt.trim()) continue;
+        if (isTextFile) {
+          // Read text directly and add to RAG
+          const txt = await f.text();
+          if (txt.trim()) {
+            await addDoc({
+              name: f.name,
+              text: txt,
+              namespace: namespace || undefined,
+            });
+          }
+        } else {
+          // Upload to storage and process with OCR
+          const uploadUrl = await generateUploadUrl();
+          
+          const uploadResult = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": f.type },
+            body: f,
+          });
 
-      await addDoc({
-        name: f.name,
-        text: txt,
-        namespace: namespace || undefined,
-      });
+          if (!uploadResult.ok) {
+            throw new Error("Upload failed");
+          }
 
-      count++;
+          const { storageId } = await uploadResult.json();
+          
+          // Save file metadata
+          const fileId = await saveFile({
+            storageId,
+            name: f.name,
+            type: f.type,
+            size: f.size,
+            namespace: namespace || undefined,
+          });
+
+          newUploadedFiles.push({
+            id: fileId,
+            name: f.name,
+            status: "pending",
+          });
+
+          // Process file (OCR + RAG) in background
+          processFile({ 
+            fileId, 
+            namespace: namespace || undefined 
+          }).then(() => {
+            setUploadedFiles(prev => 
+              prev.map(uf => 
+                uf.id === fileId ? { ...uf, status: "ready" as const } : uf
+              )
+            );
+          }).catch(() => {
+            setUploadedFiles(prev => 
+              prev.map(uf => 
+                uf.id === fileId ? { ...uf, status: "error" as const } : uf
+              )
+            );
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to process ${f.name}:`, err);
+      }
     }
 
-    setUploadStatus(`Indexed ${count} file${count !== 1 ? "s" : ""}.`);
+    setUploadedFiles(prev => [...prev, ...newUploadedFiles]);
+    setUploadStatus(`Processing ${fileList.length} file(s)...`);
     setUploading(false);
-    // Refresh docs list after upload
-    fetchDocs();
+    
+    // Refresh docs list
+    setTimeout(fetchDocs, 2000);
+  };
+
+  // Get file icon based on type
+  const getFileIcon = (name: string) => {
+    const lower = name.toLowerCase();
+    if (lower.endsWith(".pdf")) return <IconFileTypePdf className="h-4 w-4" />;
+    if (lower.endsWith(".doc") || lower.endsWith(".docx")) return <IconFileTypeDoc className="h-4 w-4" />;
+    if (lower.match(/\.(png|jpg|jpeg|gif|webp)$/)) return <IconPhoto className="h-4 w-4" />;
+    return <IconFile className="h-4 w-4" />;
+  };
+
+  // Get status icon
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "ready": return <IconCheck className="h-3 w-3 text-green-500" />;
+      case "processing": return <IconLoader className="h-3 w-3 text-blue-500 animate-spin" />;
+      case "error": return <IconAlertCircle className="h-3 w-3 text-red-500" />;
+      default: return <IconLoader className="h-3 w-3 text-neutral-400" />;
+    }
   };
 
   // ------------------------------
   // RENDER
   // ------------------------------
+  if (!organization) {
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <div className="text-center">
+          <IconSparkles className="h-12 w-12 mx-auto text-neutral-400 mb-4" />
+          <h2 className="text-lg font-semibold mb-2">Select an Organization</h2>
+          <p className="text-sm text-neutral-500">
+            Please select an organization to access RootCopilot.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-full overflow-hidden">
       {/* LEFT PANEL — CHAT */}
@@ -182,7 +318,9 @@ export default function CopilotPage() {
               <IconSparkles className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold">RootCopilot — Global Copilot</h1>
+              <h1 className="text-lg font-semibold">
+                RootCopilot — {organization.name}
+              </h1>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 Ask anything about your indexed docs, logs, configs, or knowledge base.
               </p>
@@ -278,7 +416,7 @@ export default function CopilotPage() {
         <div className="px-4 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2">
           <IconBook2 className="h-4 w-4 text-neutral-500" />
           <h2 className="text-xs font-semibold tracking-wide uppercase text-neutral-600 dark:text-neutral-300">
-            Indexed Knowledge
+            Knowledge Base
           </h2>
         </div>
 
@@ -293,7 +431,7 @@ export default function CopilotPage() {
 
             <p className="text-[11px] text-neutral-500 flex items-start gap-1">
               <IconInfoCircle className="h-3 w-3 mt-[2px]" />
-              Upload documents, text files, or code files
+              Upload PDFs, DOCs, images, or text files
             </p>
 
             <input
@@ -315,11 +453,30 @@ export default function CopilotPage() {
               />
             </label>
 
-            {uploading && <p className="text-blue-600">Indexing…</p>}
+            {uploading && <p className="text-blue-600">Uploading…</p>}
             {uploadStatus && <p className="text-green-600">{uploadStatus}</p>}
           </section>
 
-          {/* Recent Docs */}
+          {/* Processing Files */}
+          {uploadedFiles.length > 0 && (
+            <section>
+              <p className="text-[11px] font-semibold mb-1">Processing Queue</p>
+              <div className="space-y-1">
+                {uploadedFiles.slice(-5).reverse().map((f) => (
+                  <div
+                    key={f.id}
+                    className="flex items-center gap-2 rounded border border-neutral-200 dark:border-neutral-800 px-2 py-1"
+                  >
+                    {getFileIcon(f.name)}
+                    <span className="flex-1 truncate text-[11px]">{f.name}</span>
+                    {getStatusIcon(f.status)}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Indexed Entries */}
           <section>
             <div className="flex items-center justify-between mb-1">
               <p className="text-[11px] font-semibold">Indexed Entries</p>
@@ -331,13 +488,13 @@ export default function CopilotPage() {
                 <IconRefresh className={`h-3 w-3 ${loadingDocs ? "animate-spin" : ""}`} />
               </button>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-48 overflow-y-auto">
               {docs.map((d) => (
                 <div
                   key={d.entryId}
                   className="rounded border border-neutral-200 dark:border-neutral-800 px-2 py-1"
                 >
-                  <div className="text-[11px] font-medium">{d.title ?? "Untitled"}</div>
+                  <div className="text-[11px] font-medium truncate">{d.title ?? "Untitled"}</div>
                   <div className="text-[10px] text-neutral-500">
                     {d.namespace ?? "global"} •{" "}
                     {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : ""}
@@ -352,6 +509,25 @@ export default function CopilotPage() {
               )}
             </div>
           </section>
+
+          {/* Recent Files */}
+          {files && files.length > 0 && (
+            <section>
+              <p className="text-[11px] font-semibold mb-1">Recent Files</p>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {files.slice(0, 10).map((f: { _id: Id<"files">; name: string; status?: string }) => (
+                  <div
+                    key={f._id}
+                    className="flex items-center gap-2 rounded border border-neutral-200 dark:border-neutral-800 px-2 py-1"
+                  >
+                    {getFileIcon(f.name)}
+                    <span className="flex-1 truncate text-[11px]">{f.name}</span>
+                    {getStatusIcon(f.status ?? "pending")}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Sources */}
           {sources.length > 0 && (

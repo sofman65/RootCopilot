@@ -1,19 +1,32 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { getOrgId } from "./lib/auth";
 
 export const searchEverything = query({
   args: { term: v.string() },
   handler: async (ctx, { term }) => {
+    const orgId = await getOrgId(ctx);
+    if (!orgId) return { issues: [], messages: [] };
+    
+    // Get tenant
+    const tenant = await ctx.db
+      .query("tenants")
+      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
+      .unique();
+    
+    if (!tenant) return { issues: [], messages: [] };
+
     const q = term.trim().toLowerCase();
     if (!q) return { issues: [], messages: [] };
 
+    // Only fetch data for this tenant
     const [issues, threads, messages, envs, projects, clients] = await Promise.all([
-      ctx.db.query("issues").collect(),
-      ctx.db.query("threads").collect(),
-      ctx.db.query("thread_messages").collect(),
-      ctx.db.query("environments").collect(),
-      ctx.db.query("projects").collect(),
-      ctx.db.query("clients").collect(),
+      ctx.db.query("issues").withIndex("by_tenant", (idx) => idx.eq("tenantId", tenant._id)).collect(),
+      ctx.db.query("threads").withIndex("by_tenant", (idx) => idx.eq("tenantId", tenant._id)).collect(),
+      ctx.db.query("thread_messages").withIndex("by_tenant", (idx) => idx.eq("tenantId", tenant._id)).collect(),
+      ctx.db.query("environments").withIndex("by_tenant", (idx) => idx.eq("tenantId", tenant._id)).collect(),
+      ctx.db.query("projects").withIndex("by_tenant", (idx) => idx.eq("tenantId", tenant._id)).collect(),
+      ctx.db.query("clients").withIndex("by_tenant", (idx) => idx.eq("tenantId", tenant._id)).collect(),
     ]);
 
     const issueById = new Map(issues.map((i) => [i._id, i]));

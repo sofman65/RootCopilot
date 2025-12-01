@@ -1,19 +1,29 @@
 import { mutation } from './_generated/server'
+import { v } from 'convex/values'
+import { requireOrgId } from './lib/auth'
+import { api } from './_generated/api'
 
 export const run = mutation({
   args: {},
   handler: async (ctx) => {
+    await requireOrgId(ctx);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+    
     // Idempotent: reuse if already present by name
     const clientName = 'Demo Client'
     const projectName = 'Demo Project'
 
     let client = await ctx.db
       .query('clients')
+      .withIndex('by_tenant', (q) => q.eq('tenantId', tenantId))
       .filter((q) => q.eq(q.field('name'), clientName))
       .first()
 
     if (!client) {
-      const clientId = await ctx.db.insert('clients', { name: clientName })
+      const clientId = await ctx.db.insert('clients', { 
+        tenantId,
+        name: clientName,
+      })
       client = (await ctx.db.get(clientId))!
     }
 
@@ -25,6 +35,7 @@ export const run = mutation({
 
     if (!project) {
       const projectId = await ctx.db.insert('projects', {
+        tenantId,
         client_id: client._id,
         name: projectName,
       })
@@ -42,6 +53,7 @@ export const run = mutation({
         .first()
       if (!env) {
         const envId = await ctx.db.insert('environments', {
+          tenantId,
           project_id: project._id,
           name,
         })
@@ -63,12 +75,14 @@ export const run = mutation({
 
       for (let j = 0; j < 3; j++) {
         const issueId = await ctx.db.insert('issues', {
+          tenantId,
           environment_id: envId,
           title: `Sample issue ${i + 1}-${j + 1}`,
           created_at: now - (i * 3 + j) * 3600_000,
         })
         createdIssueIds.push(issueId)
         const threadId = await ctx.db.insert('threads', {
+          tenantId,
           issue_id: issueId,
         })
         await ctx.db.insert('messages', {
