@@ -2,6 +2,20 @@ import { defineSchema, defineTable } from 'convex/server'
 import { v } from 'convex/values'
 
 export default defineSchema({
+  // RAG tables (managed manually)
+  rag_documents: defineTable({
+    name: v.string(),
+    type: v.union(v.literal('pdf'), v.literal('text'), v.literal('log'), v.literal('markdown')),
+    namespace: v.optional(v.string()),
+    created_at: v.number(),
+  }),
+
+  rag_chunks: defineTable({
+    doc_id: v.id('rag_documents'),
+    chunk: v.string(),
+    embedding: v.array(v.number()),
+  }).index('by_doc', ['doc_id']),
+
   // Keep existing simple messages table used by current UI
   messages: defineTable({
     author: v.string(),

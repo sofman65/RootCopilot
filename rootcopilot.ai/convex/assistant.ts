@@ -16,6 +16,7 @@ async function buildPrompt(ctx: any, threadId: string) {
   const messages = await ctx.runQuery(api.thread_messages.getByThread, {
     threadId,
   });
+  const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
 
   // Thread
   const thread = await ctx.runQuery(api.threads.getById, { id: threadId });
@@ -70,7 +71,7 @@ Guidelines:
     })),
   ];
 
-  return chatMessages;
+  return { chatMessages, lastUserContent: lastUser?.content ?? "" };
 }
 
 // ---------------------------
@@ -83,7 +84,34 @@ export const reply = action({
     if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
 
     // Build prompt with full DB context
-    const chatMessages = await buildPrompt(ctx, threadId);
+    const { chatMessages, lastUserContent } = await buildPrompt(ctx, threadId);
+
+    // Pull semantic context from RAG if available
+    let ragContext = "";
+    if (lastUserContent) {
+      try {
+        const ragResults = await ctx.runAction(api.rag.search, {
+          query: lastUserContent,
+          limit: 5,
+          threshold: 0.15,
+        });
+        ragContext = ragResults
+          .map(
+            (r: any) =>
+              `● Source: ${r.doc?.name ?? "Unknown"}\n${r.chunk}`
+          )
+          .join("\n\n");
+      } catch (err) {
+        console.error("RAG search failed", err);
+      }
+    }
+
+    if (ragContext) {
+      chatMessages.push({
+        role: "system",
+        content: `Relevant context:\n${ragContext}`,
+      });
+    }
 
     // Create assistant placeholder message
     const msgId = await ctx.runMutation(
@@ -153,7 +181,7 @@ export const quickAction = action({
     if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
 
     // Build contextual system prompt + history
-    const chatMessages = await buildPrompt(ctx, threadId);
+    const { chatMessages } = await buildPrompt(ctx, threadId);
 
     // Add the quick-action instruction as a "new user message"
     chatMessages.push({
