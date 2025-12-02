@@ -49,10 +49,14 @@ export const getById = query({
 })
 
 export const create = mutation({
-  args: { clientId: v.id('clients'), name: v.string() },
-  handler: async (ctx, { clientId, name }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    clientId: v.id('clients'), 
+    name: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { clientId, name, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Verify client belongs to tenant
     const client = await ctx.db.get(clientId);

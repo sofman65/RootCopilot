@@ -26,12 +26,13 @@ export const addDocument = action({
     name: v.string(),
     text: v.string(),
     namespace: v.optional(v.string()),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { name, text, namespace }) => {
-    await requireOrgId(ctx);
+  handler: async (ctx, { name, text, namespace, orgId }) => {
+    await requireOrgId(ctx, orgId);
     
     // Get or create tenant
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     const tenantNamespace = getTenantNamespace(tenantId, namespace);
 
     // Add to RAG component
@@ -62,11 +63,12 @@ export const search = action({
     namespace: v.optional(v.string()),
     limit: v.optional(v.number()),
     threshold: v.optional(v.number()),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { query: q, namespace, limit, threshold }) => {
-    await requireOrgId(ctx);
+  handler: async (ctx, { query: q, namespace, limit, threshold, orgId }) => {
+    await requireOrgId(ctx, orgId);
     
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     const tenantNamespace = getTenantNamespace(tenantId, namespace);
 
     const { results, text, entries, usage } = await rag.search(ctx, {
@@ -92,11 +94,12 @@ export const ask = action({
   args: {
     question: v.string(),
     namespace: v.optional(v.string()),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { question, namespace }) => {
-    await requireOrgId(ctx);
+  handler: async (ctx, { question, namespace, orgId }) => {
+    await requireOrgId(ctx, orgId);
     
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     const tenantNamespace = getTenantNamespace(tenantId, namespace);
 
     const { text: answer, context } = await rag.generateText(ctx, {
@@ -129,16 +132,17 @@ export const ask = action({
 export const listEntries = action({
   args: {
     namespace: v.optional(v.string()),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { namespace }): Promise<Array<{
+  handler: async (ctx, { namespace, orgId }): Promise<Array<{
     entryId: string;
     title: string;
     namespace: string;
     createdAt: number;
   }>> => {
-    await requireOrgId(ctx);
+    await requireOrgId(ctx, orgId);
     
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Get entries from our tracking table
     const entries: Array<{

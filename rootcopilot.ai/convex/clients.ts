@@ -45,10 +45,13 @@ export const getById = query({
 })
 
 export const create = mutation({
-  args: { name: v.string() },
-  handler: async (ctx, { name }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    name: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { name, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     return await ctx.db.insert('clients', {
       tenantId,

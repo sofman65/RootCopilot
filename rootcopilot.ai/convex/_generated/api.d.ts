@@ -11,6 +11,7 @@
 import type * as assistant from "../assistant.js";
 import type * as clients from "../clients.js";
 import type * as components_ from "../components.js";
+import type * as debug from "../debug.js";
 import type * as environments from "../environments.js";
 import type * as files from "../files.js";
 import type * as issues from "../issues.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   assistant: typeof assistant;
   clients: typeof clients;
   components: typeof components_;
+  debug: typeof debug;
   environments: typeof environments;
   files: typeof files;
   issues: typeof issues;

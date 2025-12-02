@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useOrganization } from "@clerk/nextjs";
+import { useOrganization, CreateOrganization } from "@clerk/nextjs";
 import { Id } from "@/convex/_generated/dataModel";
 
 import { ChatBubble } from "@/components/ChatBubble";
@@ -78,6 +78,9 @@ export default function CopilotPage() {
 
   // FILES LIST
   const files = useQuery(api.files.listFiles, {});
+  
+  // DEBUG: Check identity claims
+  const identity = useQuery(api.debug.getIdentity);
 
   // INDEXED DOCS LIST (fetched via action)
   const [docs, setDocs] = React.useState<RagEntry[]>([]);
@@ -95,7 +98,10 @@ export default function CopilotPage() {
     
     setLoadingDocs(true);
     try {
-      const entries = await listEntries({ namespace: namespace || undefined });
+      const entries = await listEntries({ 
+        namespace: namespace || undefined,
+        orgId: organization.id, // Pass org ID from client
+      });
       setDocs(entries);
     } catch (err) {
       console.error("Failed to fetch entries:", err);
@@ -144,7 +150,11 @@ export default function CopilotPage() {
     setSources([]);
 
     try {
-      const res = await ask({ question: q, namespace: namespace || undefined });
+      const res = await ask({ 
+        question: q, 
+        namespace: namespace || undefined,
+        orgId: organization?.id, // Pass org ID from client
+      });
 
       setMessages((prev) => [
         ...prev,
@@ -206,6 +216,7 @@ export default function CopilotPage() {
               name: f.name,
               text: txt,
               namespace: namespace || undefined,
+              orgId: organization.id, // Pass org ID from client
             });
           }
         } else {
@@ -295,15 +306,37 @@ export default function CopilotPage() {
   if (!organization) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="text-center">
-          <IconSparkles className="h-12 w-12 mx-auto text-neutral-400 mb-4" />
-          <h2 className="text-lg font-semibold mb-2">Select an Organization</h2>
-          <p className="text-sm text-neutral-500">
-            Please select an organization to access RootCopilot.
+        <div className="text-center max-w-md">
+          <IconSparkles className="h-12 w-12 mx-auto text-blue-500 mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Welcome to RootCopilot</h2>
+          <p className="text-sm text-neutral-500 mb-6">
+            Create or select an organization to get started. Each organization has isolated data and knowledge base.
           </p>
+          
+          <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-xl p-6 border border-neutral-200 dark:border-neutral-700">
+            <CreateOrganization 
+              afterCreateOrganizationUrl="/copilot"
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  card: "shadow-none bg-transparent",
+                  headerTitle: "text-lg",
+                }
+              }}
+            />
+          </div>
+          
+          <div className="mt-6 text-xs text-neutral-400">
+            Or select an existing organization from the sidebar
+          </div>
         </div>
       </div>
     );
+  }
+
+  // DEBUG: Log identity claims
+  if (identity) {
+    console.log("Identity claims:", identity);
   }
 
   return (

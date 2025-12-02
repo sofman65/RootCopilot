@@ -5,22 +5,39 @@ type ConvexCtx = QueryCtx | MutationCtx | ActionCtx;
 /**
  * Get the organization ID from the authenticated user's identity.
  * This is the primary tenant key for multitenancy.
+ * 
+ * Note: Clerk's org_id may need to be configured in JWT templates.
+ * As a fallback, we accept orgId as a parameter from the client.
  */
-export async function getOrgId(ctx: ConvexCtx): Promise<string | null> {
+export async function getOrgId(ctx: ConvexCtx, passedOrgId?: string): Promise<string | null> {
+  // If passed from client, use it (client-side Clerk has org context)
+  if (passedOrgId) {
+    return passedOrgId;
+  }
+  
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) return null;
   
   // Clerk stores org info in the token claims
-  // The org_id claim is set when a user is in an organization context
-  const orgId = (identity as any).org_id ?? (identity as any).orgId ?? null;
-  return orgId;
+  // Check various possible claim names
+  const id = identity as Record<string, unknown>;
+  const orgId = 
+    id.org_id ?? 
+    id.orgId ?? 
+    id.organization_id ?? 
+    id.organizationId ??
+    // Clerk sometimes nests org info
+    (id.org as Record<string, unknown>)?.id ??
+    null;
+  
+  return orgId as string | null;
 }
 
 /**
  * Require organization ID - throws if not present
  */
-export async function requireOrgId(ctx: ConvexCtx): Promise<string> {
-  const orgId = await getOrgId(ctx);
+export async function requireOrgId(ctx: ConvexCtx, passedOrgId?: string): Promise<string> {
+  const orgId = await getOrgId(ctx, passedOrgId);
   if (!orgId) {
     throw new Error("Unauthorized: Organization context required");
   }
@@ -35,4 +52,5 @@ export async function getUserId(ctx: ConvexCtx): Promise<string | null> {
   if (!identity) return null;
   return identity.subject;
 }
+
 

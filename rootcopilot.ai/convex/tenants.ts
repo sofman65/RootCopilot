@@ -8,9 +8,11 @@ import { requireOrgId, getOrgId } from "./lib/auth";
  * Returns the tenant ID.
  */
 export const ensureTenant = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const orgId = await requireOrgId(ctx);
+  args: {
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { orgId: passedOrgId }) => {
+    const orgId = await requireOrgId(ctx, passedOrgId);
 
     // Check if tenant already exists
     const existing = await ctx.db
@@ -71,4 +73,5 @@ export const updateTenantName = mutation({
     return tenant._id;
   },
 });
+
 

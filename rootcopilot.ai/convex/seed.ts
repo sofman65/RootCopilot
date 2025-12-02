@@ -4,10 +4,12 @@ import { requireOrgId } from './lib/auth'
 import { api } from './_generated/api'
 
 export const run = mutation({
-  args: {},
-  handler: async (ctx) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: {
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Idempotent: reuse if already present by name
     const clientName = 'Demo Client'

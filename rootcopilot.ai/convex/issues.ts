@@ -94,10 +94,11 @@ export const create = mutation({
   args: { 
     environmentId: v.id('environments'), 
     title: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { environmentId, title }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  handler: async (ctx, { environmentId, title, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Verify environment belongs to tenant
     const env = await ctx.db.get(environmentId);

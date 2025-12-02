@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
 import {
   IconSearch,
   IconChartBar,
   IconRobot,
   IconBook2,
-  IconPlugConnected
+  IconPlugConnected,
+  IconBuilding,
+  IconSettings,
 } from "@tabler/icons-react";
 
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
@@ -94,6 +96,13 @@ export default function AppSidebar() {
               icon: <IconRobot className="h-5 w-5" />
             }}
           />
+          <SidebarLink
+            link={{
+              label: "Workspace",
+              href: "/workspace",
+              icon: <IconSettings className="h-5 w-5" />
+            }}
+          />
         </div>
 
         {open && <div className="mt-4 border-b border-neutral-200 dark:border-neutral-700" />}
@@ -138,9 +147,31 @@ export default function AppSidebar() {
           <ThemeToggle />
         </div>
 
-        {/* USER BUTTON AT BOTTOM (REAL CHATGPT STYLE) */}
-        <div className={cn("mt-auto border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
-          <div className="h-4" aria-hidden />
+        {/* ORGANIZATION SWITCHER */}
+        <div className={cn("border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
+          {open && <SectionLabel label="Organization" className="px-1 mb-2" />}
+          {open ? (
+            <OrganizationSwitcher
+              hidePersonal
+              afterCreateOrganizationUrl="/copilot"
+              afterSelectOrganizationUrl="/copilot"
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  organizationSwitcherTrigger:
+                    "w-full justify-start p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+                }
+              }}
+            />
+          ) : (
+            <div className="flex justify-center p-2">
+              <IconBuilding className="h-5 w-5 text-neutral-500" />
+            </div>
+          )}
+        </div>
+
+        {/* USER BUTTON AT BOTTOM */}
+        <div className={cn("border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
           {open && <SectionLabel label="Profile" className="px-1 mb-1" />}
           <UserButton
             appearance={{

@@ -60,10 +60,11 @@ export const create = mutation({
   args: { 
     projectId: v.id('projects'), 
     name: envNames,
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { projectId, name }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  handler: async (ctx, { projectId, name, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Verify project belongs to tenant
     const project = await ctx.db.get(projectId);
