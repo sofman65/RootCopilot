@@ -13,6 +13,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 
 type ProjectListProps = {
   clientId: Id<"clients">;
+  orgId?: string; // Pass from parent
   expandedProjects: Set<Id<"projects">>;
   setExpandedProjects: React.Dispatch<React.SetStateAction<Set<Id<"projects">>>>;
   expandedEnvs: Set<Id<"environments">>;
@@ -22,6 +23,7 @@ type ProjectListProps = {
 
 export default function ProjectList({
   clientId,
+  orgId,
   expandedProjects,
   setExpandedProjects,
   expandedEnvs,
@@ -29,7 +31,10 @@ export default function ProjectList({
   openIssue
 }: ProjectListProps) {
   const { open } = useSidebar();
-  const projects = useQuery(api.projects.listByClient, { clientId });
+  const projects = useQuery(
+    api.projects.listByClient, 
+    orgId ? { clientId, orgId } : "skip"
+  );
   if (projects === undefined) return <SkeletonList count={3} indent />;
 
   return (
@@ -45,6 +50,7 @@ export default function ProjectList({
           {expandedProjects.has(p._id) && (
             <EnvironmentList
               projectId={p._id}
+              orgId={orgId}
               expandedEnvs={expandedEnvs}
               setExpandedEnvs={setExpandedEnvs}
               openIssue={openIssue}

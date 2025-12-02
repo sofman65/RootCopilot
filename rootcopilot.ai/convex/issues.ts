@@ -4,9 +4,12 @@ import { requireOrgId, getOrgId } from './lib/auth'
 import { api } from './_generated/api'
 
 export const listByEnvironment = query({
-  args: { environmentId: v.id('environments') },
-  handler: async (ctx, { environmentId }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    environmentId: v.id('environments'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { environmentId, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return [];
     
     const tenant = await ctx.db
@@ -28,9 +31,11 @@ export const listByEnvironment = query({
 })
 
 export const listAll = query({
-  args: {},
-  handler: async (ctx) => {
-    const orgId = await getOrgId(ctx);
+  args: {
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return [];
     
     const tenant = await ctx.db
@@ -49,9 +54,12 @@ export const listAll = query({
 })
 
 export const get = query({
-  args: { id: v.id('issues') },
-  handler: async (ctx, { id }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    id: v.id('issues'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { id, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return null;
     
     const issue = await ctx.db.get(id);
@@ -70,9 +78,12 @@ export const get = query({
 })
 
 export const getById = query({
-  args: { issueId: v.id("issues") },
-  handler: async (ctx, { issueId }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    issueId: v.id("issues"),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { issueId, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return null;
     
     const issue = await ctx.db.get(issueId);
@@ -116,10 +127,14 @@ export const create = mutation({
 })
 
 export const update = mutation({
-  args: { id: v.id('issues'), title: v.string() },
-  handler: async (ctx, { id, title }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    id: v.id('issues'), 
+    title: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { id, title, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     const issue = await ctx.db.get(id);
     if (!issue || issue.tenantId !== tenantId) {
@@ -131,10 +146,13 @@ export const update = mutation({
 })
 
 export const remove = mutation({
-  args: { id: v.id('issues') },
-  handler: async (ctx, { id }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    id: v.id('issues'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { id, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     const issue = await ctx.db.get(id);
     if (!issue || issue.tenantId !== tenantId) {

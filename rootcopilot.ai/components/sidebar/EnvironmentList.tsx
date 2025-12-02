@@ -13,6 +13,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 
 type EnvironmentListProps = {
   projectId: Id<"projects">;
+  orgId?: string; // Pass from parent
   expandedEnvs: Set<Id<"environments">>;
   setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<Id<"environments">>>>;
   openIssue: (x: Id<"issues">) => void;
@@ -20,12 +21,16 @@ type EnvironmentListProps = {
 
 export default function EnvironmentList({
   projectId,
+  orgId,
   expandedEnvs,
   setExpandedEnvs,
   openIssue
 }: EnvironmentListProps) {
   const { open } = useSidebar();
-  const envs = useQuery(api.environments.listByProject, { projectId });
+  const envs = useQuery(
+    api.environments.listByProject, 
+    orgId ? { projectId, orgId } : "skip"
+  );
   if (envs === undefined) return <SkeletonList count={4} indent />;
 
   return (
@@ -38,7 +43,13 @@ export default function EnvironmentList({
             expanded={expandedEnvs.has(env._id)}
             onToggle={() => toggle(expandedEnvs, setExpandedEnvs, env._id)}
           />
-          {expandedEnvs.has(env._id) && <IssueList environmentId={env._id} openIssue={openIssue} />}
+          {expandedEnvs.has(env._id) && (
+            <IssueList 
+              environmentId={env._id} 
+              orgId={orgId}
+              openIssue={openIssue} 
+            />
+          )}
         </div>
       ))}
     </div>

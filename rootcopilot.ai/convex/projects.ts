@@ -4,9 +4,12 @@ import { requireOrgId, getOrgId } from './lib/auth'
 import { api } from './_generated/api'
 
 export const listByClient = query({
-  args: { clientId: v.id('clients') },
-  handler: async (ctx, { clientId }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    clientId: v.id('clients'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { clientId, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return [];
     
     const tenant = await ctx.db
@@ -28,9 +31,12 @@ export const listByClient = query({
 })
 
 export const getById = query({
-  args: { id: v.id('projects') },
-  handler: async (ctx, { id }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    id: v.id('projects'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { id, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return null;
     
     const project = await ctx.db.get(id);
@@ -73,10 +79,14 @@ export const create = mutation({
 })
 
 export const update = mutation({
-  args: { id: v.id('projects'), name: v.string() },
-  handler: async (ctx, { id, name }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    id: v.id('projects'), 
+    name: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { id, name, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     const project = await ctx.db.get(id);
     if (!project || project.tenantId !== tenantId) {
@@ -88,10 +98,13 @@ export const update = mutation({
 })
 
 export const remove = mutation({
-  args: { id: v.id('projects') },
-  handler: async (ctx, { id }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    id: v.id('projects'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { id, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     const project = await ctx.db.get(id);
     if (!project || project.tenantId !== tenantId) {

@@ -12,6 +12,7 @@ import SkeletonList from "./SkeletonList";
 
 type WorkspaceTreeProps = {
   clients: ReturnType<typeof useQuery<typeof api.clients.list>>;
+  orgId?: string; // Pass from parent
   expandedClients: Set<Id<"clients">>;
   setExpandedClients: React.Dispatch<React.SetStateAction<Set<Id<"clients">>>>;
   expandedProjects: Set<Id<"projects">>;
@@ -23,6 +24,7 @@ type WorkspaceTreeProps = {
 
 export default function WorkspaceTree({
   clients,
+  orgId,
   expandedClients,
   setExpandedClients,
   expandedProjects,
@@ -53,6 +55,7 @@ export default function WorkspaceTree({
           {expandedClients.has(client._id) && (
             <ProjectList
               clientId={client._id}
+              orgId={orgId}
               expandedProjects={expandedProjects}
               setExpandedProjects={setExpandedProjects}
               expandedEnvs={expandedEnvs}

@@ -11,12 +11,16 @@ import { useSidebar } from "@/components/ui/sidebar";
 
 type IssueListProps = {
   environmentId: Id<"environments">;
+  orgId?: string; // Pass from parent
   openIssue: (x: Id<"issues">) => void;
 };
 
-export default function IssueList({ environmentId, openIssue }: IssueListProps) {
+export default function IssueList({ environmentId, orgId, openIssue }: IssueListProps) {
   const { open } = useSidebar();
-  const issues = useQuery(api.issues.listByEnvironment, { environmentId });
+  const issues = useQuery(
+    api.issues.listByEnvironment, 
+    orgId ? { environmentId, orgId } : "skip"
+  );
   if (issues === undefined) return <SkeletonList count={5} indent />;
 
   return (

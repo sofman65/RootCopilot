@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
-import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
+import { UserButton, OrganizationSwitcher, useOrganization } from "@clerk/nextjs";
 import {
   IconSearch,
   IconChartBar,
@@ -34,6 +34,7 @@ type Persisted = {
 export default function AppSidebar() {
   const router = useRouter();
   const { open } = useSidebar();
+  const { organization } = useOrganization();
 
   const [expandedClients, setExpandedClients] = useState(new Set<Id<"clients">>());
   const [expandedProjects, setExpandedProjects] = useState(new Set<Id<"projects">>());
@@ -63,7 +64,11 @@ export default function AppSidebar() {
     } catch {}
   }, [expandedClients, expandedProjects, expandedEnvs]);
 
-  const clients = useQuery(api.clients.list);
+  // Pass orgId to the query so it can filter by tenant
+  const clients = useQuery(
+    api.clients.list, 
+    organization ? { orgId: organization.id } : "skip"
+  );
 
   return (
     <Sidebar>
@@ -112,6 +117,7 @@ export default function AppSidebar() {
           {open && <SectionLabel label="Workspaces" className="px-3 mb-2" />}
           <WorkspaceTree
             clients={clients}
+            orgId={organization?.id}
             expandedClients={expandedClients}
             setExpandedClients={setExpandedClients}
             expandedProjects={expandedProjects}

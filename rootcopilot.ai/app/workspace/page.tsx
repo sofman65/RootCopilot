@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useOrganization } from "@clerk/nextjs";
 import { Id } from "@/convex/_generated/dataModel";
@@ -22,15 +22,24 @@ type EnvName = "PROD" | "UAT" | "SIT" | "PRE-SIT" | "DEV";
 export default function WorkspacePage() {
   const { organization } = useOrganization();
   
-  // Queries
-  const clients = useQuery(api.clients.list);
+  // Queries - pass orgId to filter by tenant
+  const clients = useQuery(
+    api.clients.list, 
+    organization ? { orgId: organization.id } : "skip"
+  );
   
-  // Mutations
+  // Mutations - Create
   const createClient = useMutation(api.clients.create);
   const createProject = useMutation(api.projects.create);
   const createEnvironment = useMutation(api.environments.create);
   const createIssue = useMutation(api.issues.create);
   const seedWorkspace = useMutation(api.seed.run);
+  
+  // Mutations - Delete
+  const deleteClient = useMutation(api.clients.remove);
+  const deleteProject = useMutation(api.projects.remove);
+  const deleteEnvironment = useMutation(api.environments.remove);
+  const deleteIssue = useMutation(api.issues.remove);
   
   // State
   const [newClientName, setNewClientName] = React.useState("");
@@ -43,26 +52,27 @@ export default function WorkspacePage() {
   
   const [isSeeding, setIsSeeding] = React.useState(false);
   const [seedResult, setSeedResult] = React.useState<string | null>(null);
+  const [deletingId, setDeletingId] = React.useState<string | null>(null);
 
   // Get projects for selected client
   const projects = useQuery(
     api.projects.listByClient,
-    selectedClient ? { clientId: selectedClient } : "skip"
+    selectedClient && organization ? { clientId: selectedClient, orgId: organization.id } : "skip"
   );
 
   // Get environments for selected project
   const environments = useQuery(
     api.environments.listByProject,
-    selectedProject ? { projectId: selectedProject } : "skip"
+    selectedProject && organization ? { projectId: selectedProject, orgId: organization.id } : "skip"
   );
 
   // Get issues for selected environment
   const issues = useQuery(
     api.issues.listByEnvironment,
-    selectedEnv ? { environmentId: selectedEnv } : "skip"
+    selectedEnv && organization ? { environmentId: selectedEnv, orgId: organization.id } : "skip"
   );
 
-  // Handlers - pass orgId to all mutations
+  // Handlers - Create
   const handleCreateClient = async () => {
     if (!newClientName.trim() || !organization) return;
     await createClient({ name: newClientName.trim(), orgId: organization.id });
@@ -84,6 +94,62 @@ export default function WorkspacePage() {
     if (!newIssueTitle.trim() || !selectedEnv || !organization) return;
     await createIssue({ environmentId: selectedEnv, title: newIssueTitle.trim(), orgId: organization.id });
     setNewIssueTitle("");
+  };
+
+  // Handlers - Delete
+  const handleDeleteClient = async (id: Id<"clients">, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!organization || !confirm("Delete this client and all its projects, environments, and issues?")) return;
+    setDeletingId(id);
+    try {
+      await deleteClient({ id, orgId: organization.id });
+      if (selectedClient === id) {
+        setSelectedClient(null);
+        setSelectedProject(null);
+        setSelectedEnv(null);
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteProject = async (id: Id<"projects">, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!organization || !confirm("Delete this project and all its environments and issues?")) return;
+    setDeletingId(id);
+    try {
+      await deleteProject({ id, orgId: organization.id });
+      if (selectedProject === id) {
+        setSelectedProject(null);
+        setSelectedEnv(null);
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteEnvironment = async (id: Id<"environments">, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!organization || !confirm("Delete this environment and all its issues?")) return;
+    setDeletingId(id);
+    try {
+      await deleteEnvironment({ id, orgId: organization.id });
+      if (selectedEnv === id) {
+        setSelectedEnv(null);
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteIssue = async (id: Id<"issues">) => {
+    if (!organization || !confirm("Delete this issue?")) return;
+    setDeletingId(id);
+    try {
+      await deleteIssue({ id, orgId: organization.id });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleSeed = async () => {
@@ -177,6 +243,7 @@ export default function WorkspacePage() {
                 value={newClientName}
                 onChange={(e) => setNewClientName(e.target.value)}
                 placeholder="Client name..."
+                onKeyDown={(e) => e.key === "Enter" && handleCreateClient()}
                 className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-transparent"
               />
               <button
@@ -190,21 +257,32 @@ export default function WorkspacePage() {
 
             <div className="space-y-1 max-h-40 overflow-y-auto">
               {clients?.map((client) => (
-                <button
+                <div
                   key={client._id}
                   onClick={() => {
                     setSelectedClient(client._id);
                     setSelectedProject(null);
                     setSelectedEnv(null);
                   }}
-                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                  className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm transition cursor-pointer ${
                     selectedClient === client._id
                       ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300"
                       : "hover:bg-neutral-100 dark:hover:bg-neutral-700"
                   }`}
                 >
-                  {client.name}
-                </button>
+                  <span className="truncate">{client.name}</span>
+                  <button
+                    onClick={(e) => handleDeleteClient(client._id, e)}
+                    disabled={deletingId === client._id}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
+                  >
+                    {deletingId === client._id ? (
+                      <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
+                    ) : (
+                      <IconTrash className="h-3.5 w-3.5 text-red-500" />
+                    )}
+                  </button>
+                </div>
               ))}
               {(!clients || clients.length === 0) && (
                 <p className="text-sm text-neutral-400 py-2">No clients yet</p>
@@ -232,6 +310,7 @@ export default function WorkspacePage() {
                     value={newProjectName}
                     onChange={(e) => setNewProjectName(e.target.value)}
                     placeholder="Project name..."
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateProject()}
                     className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-transparent"
                   />
                   <button
@@ -245,20 +324,31 @@ export default function WorkspacePage() {
 
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {projects?.map((project) => (
-                    <button
+                    <div
                       key={project._id}
                       onClick={() => {
                         setSelectedProject(project._id);
                         setSelectedEnv(null);
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                      className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm transition cursor-pointer ${
                         selectedProject === project._id
                           ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                           : "hover:bg-neutral-100 dark:hover:bg-neutral-700"
                       }`}
                     >
-                      {project.name}
-                    </button>
+                      <span className="truncate">{project.name}</span>
+                      <button
+                        onClick={(e) => handleDeleteProject(project._id, e)}
+                        disabled={deletingId === project._id}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
+                      >
+                        {deletingId === project._id ? (
+                          <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
+                        ) : (
+                          <IconTrash className="h-3.5 w-3.5 text-red-500" />
+                        )}
+                      </button>
+                    </div>
                   ))}
                   {(!projects || projects.length === 0) && (
                     <p className="text-sm text-neutral-400 py-2">No projects yet</p>
@@ -306,17 +396,28 @@ export default function WorkspacePage() {
 
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {environments?.map((env) => (
-                    <button
+                    <div
                       key={env._id}
                       onClick={() => setSelectedEnv(env._id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${
+                      className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm transition cursor-pointer ${
                         selectedEnv === env._id
                           ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
                           : "hover:bg-neutral-100 dark:hover:bg-neutral-700"
                       }`}
                     >
-                      {env.name}
-                    </button>
+                      <span className="truncate">{env.name}</span>
+                      <button
+                        onClick={(e) => handleDeleteEnvironment(env._id, e)}
+                        disabled={deletingId === env._id}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
+                      >
+                        {deletingId === env._id ? (
+                          <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
+                        ) : (
+                          <IconTrash className="h-3.5 w-3.5 text-red-500" />
+                        )}
+                      </button>
+                    </div>
                   ))}
                   {(!environments || environments.length === 0) && (
                     <p className="text-sm text-neutral-400 py-2">No environments yet</p>
@@ -348,6 +449,7 @@ export default function WorkspacePage() {
                     value={newIssueTitle}
                     onChange={(e) => setNewIssueTitle(e.target.value)}
                     placeholder="Issue title..."
+                    onKeyDown={(e) => e.key === "Enter" && handleCreateIssue()}
                     className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-transparent"
                   />
                   <button
@@ -363,9 +465,20 @@ export default function WorkspacePage() {
                   {issues?.map((issue) => (
                     <div
                       key={issue._id}
-                      className="px-3 py-2 rounded-lg text-sm bg-neutral-50 dark:bg-neutral-700/50"
+                      className="group flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-neutral-50 dark:bg-neutral-700/50"
                     >
-                      {issue.title}
+                      <span className="truncate">{issue.title}</span>
+                      <button
+                        onClick={() => handleDeleteIssue(issue._id)}
+                        disabled={deletingId === issue._id}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
+                      >
+                        {deletingId === issue._id ? (
+                          <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
+                        ) : (
+                          <IconTrash className="h-3.5 w-3.5 text-red-500" />
+                        )}
+                      </button>
                     </div>
                   ))}
                   {(!issues || issues.length === 0) && (
@@ -382,4 +495,3 @@ export default function WorkspacePage() {
     </div>
   );
 }
-
