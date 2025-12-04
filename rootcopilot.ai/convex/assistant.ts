@@ -11,36 +11,39 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // HELPERS
 // ---------------------------
 
-async function buildPrompt(ctx: any, threadId: string) {
+async function buildPrompt(ctx: any, threadId: string, orgId?: string) {
   // Fetch full conversation
   const messages = await ctx.runQuery(api.thread_messages.getByThread, {
     threadId,
+    orgId,
   });
   const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
 
   // Thread
-  const thread = await ctx.runQuery(api.threads.getById, { id: threadId });
+  const thread = await ctx.runQuery(api.threads.getById, { id: threadId, orgId });
   if (!thread) throw new Error("Thread not found");
 
   // Issue
   const issue = await ctx.runQuery(api.issues.getById, {
     issueId: thread.issue_id,
+    orgId,
   });
   if (!issue) throw new Error("Issue not found");
 
   // Environment
   const env = await ctx.runQuery(api.environments.getById, {
     id: issue.environment_id,
+    orgId,
   });
 
   // Project
   const project = env
-    ? await ctx.runQuery(api.projects.getById, { id: env.project_id })
+    ? await ctx.runQuery(api.projects.getById, { id: env.project_id, orgId })
     : null;
 
   // Client
   const client = project
-    ? await ctx.runQuery(api.clients.getById, { id: project.client_id })
+    ? await ctx.runQuery(api.clients.getById, { id: project.client_id, orgId })
     : null;
 
   const systemPrompt = `
@@ -79,13 +82,15 @@ Guidelines:
 // ---------------------------
 
 export const reply = action({
-  args: { threadId: v.id("threads") },
-  handler: async (ctx, { threadId }) => {
+  args: { 
+    threadId: v.id("threads"),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { threadId, orgId }) => {
     if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
 
     // Build prompt with full DB context
-    const { chatMessages, lastUserContent } = await buildPrompt(ctx, threadId);
-
+    const { chatMessages, lastUserContent } = await buildPrompt(ctx, threadId, orgId);
     // Pull semantic context from RAG if available
     let ragContext = "";
     if (lastUserContent) {
@@ -94,6 +99,7 @@ export const reply = action({
           query: lastUserContent,
           limit: 5,
           threshold: 0.3,
+          orgId,
         });
         ragContext = ragResults.text || "";
       } catch (err) {
@@ -111,7 +117,7 @@ export const reply = action({
     // Create assistant placeholder message
     const msgId = await ctx.runMutation(
       api.thread_messages.startAssistantMessage,
-      { threadId }
+      { threadId, orgId }
     );
 
     // Call OpenAI
@@ -156,6 +162,7 @@ export const reply = action({
             await ctx.runMutation(api.thread_messages.appendToMessage, {
               messageId: msgId,
               delta,
+              orgId,
             });
           }
         } catch (err) {
@@ -171,12 +178,16 @@ export const reply = action({
 // ---------------------------
 
 export const quickAction = action({
-  args: { threadId: v.id("threads"), instruction: v.string() },
-  handler: async (ctx, { threadId, instruction }) => {
+  args: { 
+    threadId: v.id("threads"), 
+    instruction: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { threadId, instruction, orgId }) => {
     if (!OPENAI_API_KEY) throw new Error("Missing OPENAI_API_KEY");
 
     // Build contextual system prompt + history
-    const { chatMessages } = await buildPrompt(ctx, threadId);
+    const { chatMessages } = await buildPrompt(ctx, threadId, orgId);
 
     // Add the quick-action instruction as a "new user message"
     chatMessages.push({
@@ -187,6 +198,7 @@ export const quickAction = action({
     // Create streaming assistant placeholder
     const msgId = await ctx.runMutation(api.thread_messages.startAssistantMessage, {
       threadId,
+      orgId,
     });
 
     // Call OpenAI for streaming
@@ -234,6 +246,7 @@ export const quickAction = action({
             await ctx.runMutation(api.thread_messages.appendToMessage, {
               messageId: msgId,
               delta,
+              orgId,
             });
           }
         } catch (err) {

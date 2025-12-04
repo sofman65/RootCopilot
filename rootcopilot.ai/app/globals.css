@@ -120,11 +120,10 @@
     height: 100%;
     margin: 0;
     padding: 0;
-    overflow: hidden; /* <-- removes browser scrollbar */
-    overscroll-behavior: none;
+    overflow: hidden;
   }
-  
   body {
+    overscroll-behavior: none;
     @apply bg-background text-foreground;
   }
   #__next,
@@ -170,4 +169,289 @@
     --rcp-accent-fg: var(--color-accent-foreground);
     --rcp-destructive: var(--color-destructive);
   }
+}
+
+/* =====================================================
+   Clerk Component Dark Theme Overrides
+   ===================================================== */
+
+/* Base card and container styles */
+.cl-card,
+.cl-cardBox,
+.cl-rootBox,
+.cl-main {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Form field inputs */
+.cl-formFieldInput,
+.cl-formFieldInput__identifier,
+.cl-formFieldInput__password,
+.cl-formFieldInput__organizationName,
+.cl-formFieldInput__organizationSlug,
+.cl-input {
+  background-color: rgb(38 38 38) !important;
+  border: 1px solid rgb(64 64 64) !important;
+  color: white !important;
+  border-radius: 0.5rem !important;
+}
+
+.cl-formFieldInput::placeholder,
+.cl-input::placeholder {
+  color: rgb(115 115 115) !important;
+}
+
+.cl-formFieldInput:focus,
+.cl-input:focus {
+  border-color: rgb(59 130 246) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2) !important;
+  outline: none !important;
+}
+
+/* Form field labels */
+.cl-formFieldLabel,
+.cl-formFieldLabelRow,
+.cl-label {
+  color: rgb(212 212 212) !important;
+}
+
+/* Form field hints and descriptions */
+.cl-formFieldHintText,
+.cl-formFieldInfoText {
+  color: rgb(115 115 115) !important;
+}
+
+/* Primary buttons */
+.cl-formButtonPrimary,
+.cl-button__primary {
+  background: linear-gradient(to right, rgb(37 99 235), rgb(147 51 234)) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 500 !important;
+}
+
+.cl-formButtonPrimary:hover,
+.cl-button__primary:hover {
+  background: linear-gradient(to right, rgb(59 130 246), rgb(168 85 247)) !important;
+}
+
+/* Secondary/outline buttons */
+.cl-formButtonReset,
+.cl-button,
+.cl-avatarImageActionsUpload {
+  background-color: rgb(38 38 38) !important;
+  border: 1px solid rgb(64 64 64) !important;
+  color: rgb(212 212 212) !important;
+}
+
+.cl-formButtonReset:hover,
+.cl-button:hover,
+.cl-avatarImageActionsUpload:hover {
+  background-color: rgb(64 64 64) !important;
+  color: white !important;
+}
+
+/* Avatar/Logo upload area */
+.cl-avatarBox,
+.cl-organizationAvatarUploaderContainer {
+  background-color: rgb(38 38 38) !important;
+  border: 1px dashed rgb(64 64 64) !important;
+  border-radius: 0.5rem !important;
+}
+
+.cl-avatarImageActionsUpload {
+  border-radius: 0.375rem !important;
+}
+
+/* File drop area */
+.cl-fileDropAreaBox,
+.cl-fileDropArea {
+  background-color: rgb(38 38 38) !important;
+  border: 2px dashed rgb(64 64 64) !important;
+}
+
+.cl-fileDropAreaHint,
+.cl-fileDropAreaIcon,
+.cl-fileDropAreaIconBox {
+  color: rgb(115 115 115) !important;
+}
+
+.cl-fileDropAreaButtonPrimary {
+  color: rgb(96 165 250) !important;
+}
+
+/* Social buttons */
+.cl-socialButtonsBlockButton,
+.cl-socialButtonsIconButton {
+  background-color: rgb(38 38 38) !important;
+  border: 1px solid rgb(64 64 64) !important;
+}
+
+.cl-socialButtonsBlockButton:hover,
+.cl-socialButtonsIconButton:hover {
+  background-color: rgb(64 64 64) !important;
+}
+
+.cl-socialButtonsBlockButtonText {
+  color: white !important;
+}
+
+.cl-socialButtonsProviderIcon {
+  filter: brightness(0) invert(1) !important;
+  opacity: 0.85 !important;
+}
+
+/* Dividers */
+.cl-dividerLine {
+  background-color: rgb(64 64 64) !important;
+}
+
+.cl-dividerText {
+  color: rgb(115 115 115) !important;
+  background-color: rgb(23 23 23) !important;
+}
+
+/* Footer links */
+.cl-footerActionText {
+  color: rgb(115 115 115) !important;
+}
+
+.cl-footerActionLink {
+  color: rgb(96 165 250) !important;
+}
+
+.cl-footerActionLink:hover {
+  color: rgb(147 197 253) !important;
+}
+
+/* Identity preview */
+.cl-identityPreview,
+.cl-identityPreviewEditButtonIcon {
+  background-color: rgb(38 38 38) !important;
+  border-color: rgb(64 64 64) !important;
+}
+
+.cl-identityPreviewText {
+  color: white !important;
+}
+
+.cl-identityPreviewEditButton {
+  color: rgb(96 165 250) !important;
+}
+
+/* Alert boxes */
+.cl-alert,
+.cl-alertWarning,
+.cl-alertDanger {
+  background-color: rgb(38 38 38) !important;
+  border-color: rgb(64 64 64) !important;
+}
+
+.cl-alertText {
+  color: rgb(212 212 212) !important;
+}
+
+/* OTP inputs */
+.cl-otpCodeFieldInput,
+.cl-otpCodeField input {
+  background-color: rgb(38 38 38) !important;
+  border: 1px solid rgb(64 64 64) !important;
+  color: white !important;
+}
+
+/* Password show/hide button */
+.cl-formFieldInputShowPasswordButton {
+  color: rgb(115 115 115) !important;
+}
+
+.cl-formFieldInputShowPasswordButton:hover {
+  color: white !important;
+}
+
+/* Form actions (forgot password, etc) */
+.cl-formFieldAction {
+  color: rgb(96 165 250) !important;
+}
+
+.cl-formFieldAction:hover {
+  color: rgb(147 197 253) !important;
+}
+
+/* Error messages */
+.cl-formFieldErrorText {
+  color: rgb(248 113 113) !important;
+}
+
+/* Success messages */
+.cl-formFieldSuccessText {
+  color: rgb(74 222 128) !important;
+}
+
+/* Loading spinners and progress */
+.cl-spinner,
+.cl-loading {
+  color: rgb(96 165 250) !important;
+}
+
+/* Hide footer and branding */
+.cl-footer,
+.cl-footerPages {
+  display: none !important;
+}
+
+/* Organization profile section */
+.cl-organizationSwitcherTrigger,
+.cl-userButtonTrigger {
+  background-color: transparent !important;
+}
+
+/* Modal/popup overlays */
+.cl-modalBackdrop {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+}
+
+.cl-modalContent,
+.cl-modal {
+  background-color: rgb(23 23 23) !important;
+  border: 1px solid rgb(64 64 64) !important;
+}
+
+/* User button menu */
+.cl-userButtonPopoverCard,
+.cl-organizationSwitcherPopoverCard {
+  background-color: rgb(23 23 23) !important;
+  border: 1px solid rgb(64 64 64) !important;
+}
+
+.cl-userButtonPopoverActionButton,
+.cl-organizationSwitcherPopoverActionButton {
+  color: rgb(212 212 212) !important;
+}
+
+.cl-userButtonPopoverActionButton:hover,
+.cl-organizationSwitcherPopoverActionButton:hover {
+  background-color: rgb(38 38 38) !important;
+}
+
+/* Generic text colors */
+.cl-headerTitle,
+.cl-headerSubtitle {
+  color: white !important;
+}
+
+p, span, label {
+  /* Only apply to Clerk elements */
+}
+
+/* Override any remaining white backgrounds in Clerk */
+[data-clerk-component] {
+  --clerk-background: transparent;
+}
+
+/* Recommendation text under logo upload */
+.cl-organizationProfile__organizationAvatarUploaderContainer span,
+.cl-avatarBox + div,
+.cl-formFieldHintText {
+  color: rgb(115 115 115) !important;
 }

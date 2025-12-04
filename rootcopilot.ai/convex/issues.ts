@@ -105,9 +105,25 @@ export const create = mutation({
   args: { 
     environmentId: v.id('environments'), 
     title: v.string(),
+    description: v.optional(v.string()),      // Rich text JSON
+    descriptionHtml: v.optional(v.string()),  // Pre-rendered HTML
+    status: v.optional(v.union(
+      v.literal("open"),
+      v.literal("in_progress"),
+      v.literal("resolved"),
+      v.literal("closed"),
+      v.literal("unknown")
+    )),
+    priority: v.optional(v.union(
+      v.literal("critical"),
+      v.literal("high"),
+      v.literal("medium"),
+      v.literal("low"),
+      v.literal("unknown")
+    )),
     orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { environmentId, title, orgId }) => {
+  handler: async (ctx, { environmentId, title, description, descriptionHtml, status, priority, orgId }) => {
     await requireOrgId(ctx, orgId);
     const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
@@ -117,12 +133,24 @@ export const create = mutation({
       throw new Error('Environment not found or unauthorized');
     }
     
-    return await ctx.db.insert('issues', {
+    const issueId = await ctx.db.insert('issues', {
       tenantId,
       environment_id: environmentId,
       title,
+      description,
+      descriptionHtml,
+      status: status ?? "open",
+      priority: priority ?? "medium",
       created_at: Date.now(),
     });
+    
+    // Auto-create thread for the issue
+    await ctx.db.insert('threads', {
+      tenantId,
+      issue_id: issueId,
+    });
+    
+    return issueId;
   },
 })
 

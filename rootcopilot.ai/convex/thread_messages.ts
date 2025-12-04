@@ -4,9 +4,12 @@ import { requireOrgId, getOrgId } from "./lib/auth";
 import { api } from "./_generated/api";
 
 export const getByThread = query({
-  args: { threadId: v.id("threads") },
-  handler: async (ctx, { threadId }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    threadId: v.id("threads"),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { threadId, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return [];
     
     const tenant = await ctx.db
@@ -29,10 +32,14 @@ export const getByThread = query({
 });
 
 export const sendMessage = mutation({
-  args: { threadId: v.id("threads"), content: v.string() },
-  handler: async (ctx, { threadId, content }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    threadId: v.id("threads"), 
+    content: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { threadId, content, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Verify thread belongs to tenant
     const thread = await ctx.db.get(threadId);
@@ -51,10 +58,13 @@ export const sendMessage = mutation({
 });
 
 export const startAssistantMessage = mutation({
-  args: { threadId: v.id("threads") },
-  handler: async (ctx, { threadId }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    threadId: v.id("threads"),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { threadId, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Verify thread belongs to tenant
     const thread = await ctx.db.get(threadId);
@@ -77,10 +87,11 @@ export const appendToMessage = mutation({
   args: {
     messageId: v.id("thread_messages"),
     delta: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { messageId, delta }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  handler: async (ctx, { messageId, delta, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     const msg = await ctx.db.get(messageId);
     if (!msg) {
@@ -102,10 +113,11 @@ export const sendQuickActionUserMessage = mutation({
   args: {
     threadId: v.id("threads"),
     instruction: v.string(),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
   },
-  handler: async (ctx, { threadId, instruction }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  handler: async (ctx, { threadId, instruction, orgId }) => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Verify thread belongs to tenant
     const thread = await ctx.db.get(threadId);

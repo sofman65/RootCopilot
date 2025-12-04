@@ -19,7 +19,7 @@ export default function RootContentWrapper({
         duration: 0.25,
         ease: "easeInOut",
       }}
-      className="h-full w-full overflow-hidden flex flex-col" // <-- FIXED
+      className="h-screen w-full overflow-hidden flex flex-col bg-neutral-950"
     >
       {children}
     </motion.div>

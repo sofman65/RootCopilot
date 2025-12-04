@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useOrganization, CreateOrganization } from "@clerk/nextjs";
+import { useOrganization } from "@clerk/nextjs";
 import { Id } from "@/convex/_generated/dataModel";
 
 import { ChatBubble } from "@/components/ChatBubble";
@@ -300,35 +301,24 @@ export default function CopilotPage() {
     }
   };
 
+  const router = useRouter();
+
   // ------------------------------
   // RENDER
   // ------------------------------
+  // Redirect to onboarding if no organization
+  React.useEffect(() => {
+    if (!organization) {
+      router.push("/onboarding");
+    }
+  }, [organization, router]);
+
   if (!organization) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="text-center max-w-md">
-          <IconSparkles className="h-12 w-12 mx-auto text-blue-500 mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Welcome to RootCopilot</h2>
-          <p className="text-sm text-neutral-500 mb-6">
-            Create or select an organization to get started. Each organization has isolated data and knowledge base.
-          </p>
-          
-          <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-xl p-6 border border-neutral-200 dark:border-neutral-700">
-            <CreateOrganization 
-              afterCreateOrganizationUrl="/copilot"
-              appearance={{
-                elements: {
-                  rootBox: "w-full",
-                  card: "shadow-none bg-transparent",
-                  headerTitle: "text-lg",
-                }
-              }}
-            />
-          </div>
-          
-          <div className="mt-6 text-xs text-neutral-400">
-            Or select an existing organization from the sidebar
-          </div>
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-neutral-200 dark:bg-neutral-800" />
+          <div className="w-32 h-4 rounded bg-neutral-200 dark:bg-neutral-800" />
         </div>
       </div>
     );
@@ -340,21 +330,21 @@ export default function CopilotPage() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div className="flex h-screen w-full overflow-hidden bg-neutral-950">
       {/* LEFT PANEL — CHAT */}
-      <div className="flex flex-col flex-1 h-full">
+      <div className="flex flex-col flex-1 h-full min-h-0">
 
         {/* HEADER */}
-        <div className="sticky top-0 z-10 bg-white/90 dark:bg-neutral-900/90 backdrop-blur border-b border-neutral-200 dark:border-neutral-800 px-6 py-4">
+        <div className="sticky top-0 z-10 bg-neutral-900/90 backdrop-blur border-b border-neutral-800 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white shadow">
               <IconSparkles className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-lg font-semibold">
+              <h1 className="text-lg font-semibold text-white">
                 RootCopilot — {organization.name}
               </h1>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="text-xs text-neutral-400">
                 Ask anything about your indexed docs, logs, configs, or knowledge base.
               </p>
             </div>
@@ -364,13 +354,13 @@ export default function CopilotPage() {
         {/* CHAT SCROLL AREA */}
         <div
           ref={scrollRef}
-          className="flex-1 overflow-y-auto px-4 md:px-8 py-4 space-y-3"
+          className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 py-4 space-y-3 bg-neutral-950"
         >
           {messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400 text-sm text-center max-w-sm mx-auto">
+            <div className="h-full flex items-center justify-center text-neutral-400 text-sm text-center max-w-sm mx-auto">
               Try asking:  
               <br />
-              <span className="font-medium">
+              <span className="font-medium text-neutral-300">
                 &ldquo;Summarize all PSP configuration docs related to UAT.&rdquo;
               </span>
             </div>
@@ -391,15 +381,15 @@ export default function CopilotPage() {
 
           {sources.length > 0 && (
             <div className="mt-4 space-y-1">
-              <h3 className="text-xs font-semibold text-neutral-500">Sources</h3>
+              <h3 className="text-xs font-semibold text-neutral-400">Sources</h3>
               {sources.map((s, i) => (
                 <div
                   key={i}
-                  className="text-xs border border-blue-200 dark:border-blue-900 rounded p-2 bg-blue-50 dark:bg-blue-950/40"
+                  className="text-xs border border-blue-900 rounded p-2 bg-blue-950/40 text-neutral-300"
                 >
-                  <strong>{s.doc?.name ?? "Unknown"}</strong>
+                  <strong className="text-blue-300">{s.doc?.name ?? "Unknown"}</strong>
                   <br />
-                  <span className="opacity-70">
+                  <span className="text-neutral-500">
                     {s.doc?.namespace ? `${s.doc.namespace}` : "global"} • score{" "}
                     {s.score.toFixed(3)}
                   </span>
@@ -410,7 +400,7 @@ export default function CopilotPage() {
         </div>
 
         {/* COMPOSER */}
-        <div className="border-t border-neutral-200 dark:border-neutral-800 px-4 md:px-8 py-4 bg-white/90 dark:bg-neutral-900/90 backdrop-blur">
+        <div className="border-t border-neutral-800 px-4 md:px-8 py-4 bg-neutral-900/90 backdrop-blur">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -423,7 +413,7 @@ export default function CopilotPage() {
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              className="flex-1 resize-none rounded-2xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-4 py-3 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="flex-1 resize-none rounded-2xl border border-neutral-700 bg-neutral-800 text-white px-4 py-3 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-neutral-500"
               placeholder="Ask RootCopilot…"
             />
 
@@ -445,10 +435,10 @@ export default function CopilotPage() {
       </div>
 
       {/* RIGHT PANEL — RAG INDEX */}
-      <aside className="hidden lg:flex w-80 xl:w-96 border-l border-neutral-200 dark:border-neutral-800 flex-col h-full bg-neutral-50/60 dark:bg-neutral-950/60">
-        <div className="px-4 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center gap-2">
-          <IconBook2 className="h-4 w-4 text-neutral-500" />
-          <h2 className="text-xs font-semibold tracking-wide uppercase text-neutral-600 dark:text-neutral-300">
+      <aside className="hidden lg:flex w-80 xl:w-96 border-l border-neutral-800 flex-col h-full bg-neutral-900/60">
+        <div className="px-4 py-4 border-b border-neutral-800 flex items-center gap-2">
+          <IconBook2 className="h-4 w-4 text-neutral-400" />
+          <h2 className="text-xs font-semibold tracking-wide uppercase text-neutral-300">
             Knowledge Base
           </h2>
         </div>
@@ -456,8 +446,8 @@ export default function CopilotPage() {
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 text-xs">
 
           {/* Upload Section */}
-          <section className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/60 p-3 space-y-2">
-            <div className="flex items-center gap-2">
+          <section className="rounded-lg border border-neutral-800 bg-neutral-900/60 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-neutral-300">
               <IconUpload className="h-4 w-4" />
               <p className="text-[11px] font-semibold">Add Context</p>
             </div>
@@ -469,13 +459,13 @@ export default function CopilotPage() {
 
             <input
               type="text"
-              className="w-full rounded border bg-transparent px-2 py-1 text-[11px] border-neutral-300 dark:border-neutral-700"
+              className="w-full rounded border bg-neutral-800 px-2 py-1 text-[11px] border-neutral-700 text-white placeholder:text-neutral-500"
               placeholder="Namespace (optional)"
               value={namespace}
               onChange={(e) => setNamespace(e.target.value)}
             />
 
-            <label className="cursor-pointer border border-dashed rounded px-3 py-3 text-[11px] text-center hover:border-blue-500 transition block">
+            <label className="cursor-pointer border border-dashed border-neutral-700 rounded px-3 py-3 text-[11px] text-center hover:border-blue-500 transition block text-neutral-400 hover:text-white">
               Upload files
               <input
                 type="file"
@@ -486,19 +476,19 @@ export default function CopilotPage() {
               />
             </label>
 
-            {uploading && <p className="text-blue-600">Uploading…</p>}
-            {uploadStatus && <p className="text-green-600">{uploadStatus}</p>}
+            {uploading && <p className="text-blue-400">Uploading…</p>}
+            {uploadStatus && <p className="text-green-400">{uploadStatus}</p>}
           </section>
 
           {/* Processing Files */}
           {uploadedFiles.length > 0 && (
             <section>
-              <p className="text-[11px] font-semibold mb-1">Processing Queue</p>
+              <p className="text-[11px] font-semibold mb-1 text-neutral-300">Processing Queue</p>
               <div className="space-y-1">
                 {uploadedFiles.slice(-5).reverse().map((f) => (
                   <div
                     key={f.id}
-                    className="flex items-center gap-2 rounded border border-neutral-200 dark:border-neutral-800 px-2 py-1"
+                    className="flex items-center gap-2 rounded border border-neutral-800 px-2 py-1 text-neutral-300"
                   >
                     {getFileIcon(f.name)}
                     <span className="flex-1 truncate text-[11px]">{f.name}</span>
@@ -512,11 +502,11 @@ export default function CopilotPage() {
           {/* Indexed Entries */}
           <section>
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[11px] font-semibold">Indexed Entries</p>
+              <p className="text-[11px] font-semibold text-neutral-300">Indexed Entries</p>
               <button
                 onClick={fetchDocs}
                 disabled={loadingDocs}
-                className="p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 transition"
+                className="p-1 rounded hover:bg-neutral-800 transition text-neutral-400"
               >
                 <IconRefresh className={`h-3 w-3 ${loadingDocs ? "animate-spin" : ""}`} />
               </button>
@@ -525,9 +515,9 @@ export default function CopilotPage() {
               {docs.map((d) => (
                 <div
                   key={d.entryId}
-                  className="rounded border border-neutral-200 dark:border-neutral-800 px-2 py-1"
+                  className="rounded border border-neutral-800 px-2 py-1"
                 >
-                  <div className="text-[11px] font-medium truncate">{d.title ?? "Untitled"}</div>
+                  <div className="text-[11px] font-medium truncate text-neutral-200">{d.title ?? "Untitled"}</div>
                   <div className="text-[10px] text-neutral-500">
                     {d.namespace ?? "global"} •{" "}
                     {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : ""}
@@ -546,12 +536,12 @@ export default function CopilotPage() {
           {/* Recent Files */}
           {files && files.length > 0 && (
             <section>
-              <p className="text-[11px] font-semibold mb-1">Recent Files</p>
+              <p className="text-[11px] font-semibold mb-1 text-neutral-300">Recent Files</p>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {files.slice(0, 10).map((f: { _id: Id<"files">; name: string; status?: string }) => (
                   <div
                     key={f._id}
-                    className="flex items-center gap-2 rounded border border-neutral-200 dark:border-neutral-800 px-2 py-1"
+                    className="flex items-center gap-2 rounded border border-neutral-800 px-2 py-1 text-neutral-300"
                   >
                     {getFileIcon(f.name)}
                     <span className="flex-1 truncate text-[11px]">{f.name}</span>
@@ -565,13 +555,13 @@ export default function CopilotPage() {
           {/* Sources */}
           {sources.length > 0 && (
             <section>
-              <p className="text-[11px] font-semibold mb-1">Sources from last answer</p>
+              <p className="text-[11px] font-semibold mb-1 text-neutral-300">Sources from last answer</p>
               {sources.map((s, i) => (
                 <div
                   key={i}
-                  className="rounded border border-blue-200 dark:border-blue-900 px-2 py-1 bg-blue-50 dark:bg-blue-950/40"
+                  className="rounded border border-blue-900 px-2 py-1 bg-blue-950/40"
                 >
-                  <div className="text-[11px] font-medium">{s.doc?.name ?? "Unknown"}</div>
+                  <div className="text-[11px] font-medium text-blue-300">{s.doc?.name ?? "Unknown"}</div>
                   <div className="text-[10px] text-neutral-500">
                     {s.doc?.namespace ?? "global"} •{" "}
                     score {s.score.toFixed(3)}

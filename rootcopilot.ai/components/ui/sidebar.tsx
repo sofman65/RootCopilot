@@ -110,12 +110,10 @@ export const DesktopSidebar = ({
     <>
       <motion.div
         className={cn(
-          // Full-height, fixed background that never changes height - ChatGPT style
+          // Full-height, fixed background that never changes height
           "hidden md:flex md:flex-col fixed left-0 top-0 h-screen w-[300px] shrink-0",
-          // Light mode - clean white background like ChatGPT
-          "border-r border-neutral-200 bg-white",
-          // Dark mode - dark background like ChatGPT
-          "dark:border-neutral-700 dark:bg-neutral-900",
+          // Dark background
+          "border-r border-neutral-800 bg-neutral-900",
           className,
         )}
         animate={{
@@ -143,15 +141,15 @@ export const MobileSidebar = ({
     <>
       <div
         className={cn(
-          // Mobile top bar uses translucent surface + blur in light and dark
+          // Mobile top bar
           "fixed top-0 left-0 right-0 z-40 h-12 px-4 flex flex-row md:hidden items-center justify-between w-full",
-          "bg-white/80 dark:bg-neutral-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:supports-[backdrop-filter]:bg-neutral-900/60",
+          "bg-neutral-900/90 backdrop-blur",
         )}
         {...props}
       >
         <div className="flex justify-end z-20 w-full">
           <IconMenu2
-            className="text-neutral-800 dark:text-neutral-200"
+            className="text-neutral-200"
             onClick={() => setOpen(!open)}
           />
         </div>
@@ -167,14 +165,14 @@ export const MobileSidebar = ({
               ease: "easeInOut",
             }}
             className={cn(
-              // Drawer surface follows theme gradient for consistency
+              // Drawer surface - dark theme
               "fixed h-full w-full inset-0 p-10 z-[100] flex flex-col justify-between md:hidden",
-              "bg-gradient-to-b from-white to-neutral-50 dark:from-neutral-900 dark:to-neutral-800",
+              "bg-neutral-900",
               className
             )}
           >
             <div
-              className="absolute right-10 top-10 z-50 text-neutral-800 dark:text-neutral-200"
+              className="absolute right-10 top-10 z-50 text-neutral-200"
               onClick={() => setOpen(!open)}
             >
               <IconX />

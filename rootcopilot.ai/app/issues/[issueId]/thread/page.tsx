@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
+import { useOrganization } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -15,6 +16,7 @@ import { groupMessages } from "@/lib/utils";
 
 export default function ThreadPage({ params }: { params: Promise<{ issueId: string }> }) {
   const { issueId } = React.use(params);
+  const { organization } = useOrganization();
 
   // --------------------------------------------
   // STATE + REFS
@@ -45,18 +47,20 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   const triggerQuickAction = useAction(api.assistant.quickAction);
   const createThread = useMutation(api.threads.create);
 
-  const thread = useQuery(api.threads.getByIssue, {
-    issueId: issueId as Id<"issues">,
-  });
+  const thread = useQuery(
+    api.threads.getByIssue, 
+    organization ? { issueId: issueId as Id<"issues">, orgId: organization.id } : "skip"
+  );
 
   const messages = useQuery(
     api.thread_messages.getByThread,
-    thread ? { threadId: thread._id } : "skip"
+    thread && organization ? { threadId: thread._id, orgId: organization.id } : "skip"
   );
 
-  const issue = useQuery(api.issues.get, {
-    id: issueId as Id<"issues">,
-  });
+  const issue = useQuery(
+    api.issues.get, 
+    organization ? { id: issueId as Id<"issues">, orgId: organization.id } : "skip"
+  );
 
   // --------------------------------------------
   // MEASURE HEADER HEIGHT
@@ -92,13 +96,13 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   // CREATE THREAD IF MISSING
   // --------------------------------------------
   React.useEffect(() => {
-    if (thread === null && !creatingRef.current) {
+    if (thread === null && organization && !creatingRef.current) {
       creatingRef.current = true;
-      createThread({ issueId: issueId as Id<"issues"> }).finally(() => {
+      createThread({ issueId: issueId as Id<"issues">, orgId: organization.id }).finally(() => {
         creatingRef.current = false;
       });
     }
-  }, [thread, issueId, createThread]);
+  }, [thread, issueId, createThread, organization]);
 
   // --------------------------------------------
   // SCROLL HELPERS
@@ -196,7 +200,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   // SEND MESSAGE
   // --------------------------------------------
   const handleSubmit = async () => {
-    if (!thread || !input.trim()) return;
+    if (!thread || !input.trim() || !organization) return;
 
     setIsSending(true);
     setIsAssistantReplying(true);
@@ -204,11 +208,12 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     await sendMessage({
       threadId: thread._id,
       content: input.trim(),
+      orgId: organization.id,
     });
 
     setInput("");
 
-    await triggerReply({ threadId: thread._id });
+    await triggerReply({ threadId: thread._id, orgId: organization.id });
 
     scrollToBottom("smooth");
     updateScrollButton();
@@ -221,7 +226,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   // QUICK ACTION HANDLER
   // --------------------------------------------
   const handleQuickAction = async (instruction: string) => {
-    if (!thread) return;
+    if (!thread || !organization) return;
 
     setIsAssistantReplying(true);
 
@@ -229,12 +234,14 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     await sendQuickActionUserMessage({
       threadId: thread._id,
       instruction,
+      orgId: organization.id,
     });
 
     // 2. Then trigger the assistant reply
     await triggerQuickAction({
       threadId: thread._id,
       instruction,
+      orgId: organization.id,
     });
 
     scrollToBottom("smooth");
@@ -246,6 +253,10 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   // --------------------------------------------
   // LOADING STATES
   // --------------------------------------------
+  if (!organization) {
+    return <div className="p-6">Please select an organization…</div>;
+  }
+  
   if (!issue || !thread) {
     return <div className="p-6">Loading…</div>;
   }

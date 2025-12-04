@@ -4,9 +4,12 @@ import { requireOrgId, getOrgId } from './lib/auth'
 import { api } from './_generated/api'
 
 export const getByIssue = query({
-  args: { issueId: v.id('issues') },
-  handler: async (ctx, { issueId }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    issueId: v.id('issues'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { issueId, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return null;
     
     const tenant = await ctx.db
@@ -28,10 +31,13 @@ export const getByIssue = query({
 })
 
 export const create = mutation({
-  args: { issueId: v.id('issues') },
-  handler: async (ctx, { issueId }) => {
-    await requireOrgId(ctx);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant);
+  args: { 
+    issueId: v.id('issues'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { issueId, orgId }): Promise<import('./_generated/dataModel').Id<'threads'>> => {
+    await requireOrgId(ctx, orgId);
+    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
     
     // Verify issue belongs to tenant
     const issue = await ctx.db.get(issueId);
@@ -47,9 +53,12 @@ export const create = mutation({
 })
 
 export const getById = query({
-  args: { id: v.id('threads') },
-  handler: async (ctx, { id }) => {
-    const orgId = await getOrgId(ctx);
+  args: { 
+    id: v.id('threads'),
+    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  },
+  handler: async (ctx, { id, orgId: passedOrgId }) => {
+    const orgId = await getOrgId(ctx, passedOrgId);
     if (!orgId) return null;
     
     const thread = await ctx.db.get(id);
