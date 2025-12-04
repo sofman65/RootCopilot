@@ -1,103 +1,71 @@
-import { query, mutation } from './_generated/server'
-import { v } from 'convex/values'
-import { requireOrgId, getOrgId } from './lib/auth'
-import { api } from './_generated/api'
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { 
+  getTenant, 
+  ensureTenantId, 
+  getWithTenantCheck,
+  requireWithTenantCheck,
+} from "./lib/tenant";
 
 export const list = query({
   args: {
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+    orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return [];
-    
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-    
+  handler: async (ctx, { orgId }) => {
+    const tenant = await getTenant(ctx, orgId);
     if (!tenant) return [];
-    
+
     return ctx.db
-      .query('clients')
-      .withIndex('by_tenant', (q) => q.eq('tenantId', tenant._id))
+      .query("clients")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", tenant._id))
       .collect();
   },
-})
+});
 
 export const getById = query({
-  args: { 
-    id: v.id('clients'),
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  args: {
+    id: v.id("clients"),
+    orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { id, orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return null;
-    
-    const client = await ctx.db.get(id);
-    if (!client) return null;
-    
-    // Verify tenant access
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-    
-    if (!tenant || client.tenantId !== tenant._id) return null;
-    
-    return client;
+  handler: async (ctx, { id, orgId }) => {
+    return getWithTenantCheck(ctx, "clients", id, orgId);
   },
-})
+});
 
 export const create = mutation({
-  args: { 
+  args: {
     name: v.string(),
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+    orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { name, orgId }): Promise<import('./_generated/dataModel').Id<'clients'>> => {
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-    
-    return await ctx.db.insert('clients', {
+  handler: async (ctx, { name, orgId }) => {
+    const tenantId = await ensureTenantId(ctx, orgId);
+
+    return ctx.db.insert("clients", {
       tenantId,
       name,
     });
   },
-})
+});
 
 export const update = mutation({
-  args: { 
-    id: v.id('clients'), 
+  args: {
+    id: v.id("clients"),
     name: v.string(),
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+    orgId: v.optional(v.string()),
   },
   handler: async (ctx, { id, name, orgId }) => {
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-    
-    const client = await ctx.db.get(id);
-    if (!client || client.tenantId !== tenantId) {
-      throw new Error('Client not found or unauthorized');
-    }
-    
+    await requireWithTenantCheck(ctx, "clients", id, orgId, "Client not found or unauthorized");
     await ctx.db.patch(id, { name });
   },
-})
+});
 
 export const remove = mutation({
-  args: { 
-    id: v.id('clients'),
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  args: {
+    id: v.id("clients"),
+    orgId: v.optional(v.string()),
   },
   handler: async (ctx, { id, orgId }) => {
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-    
-    const client = await ctx.db.get(id);
-    if (!client || client.tenantId !== tenantId) {
-      throw new Error('Client not found or unauthorized');
-    }
-    
+    await requireWithTenantCheck(ctx, "clients", id, orgId, "Client not found or unauthorized");
     await ctx.db.delete(id);
   },
-})
+});

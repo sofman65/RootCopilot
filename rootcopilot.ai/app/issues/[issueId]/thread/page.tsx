@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
-import { useOrganization } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 
@@ -12,37 +11,53 @@ import TypingBubble from "@/components/TypingBubble";
 import QuickActions from "@/components/QuickActions";
 import BottomFade from "@/components/BottomFade";
 import ScrollToBottomButton from "@/components/ScrollToBottomButton";
-import { groupMessages } from "@/lib/utils";
+import { SendButton } from "@/components/shared";
+import { 
+  useAutoGrowTextarea, 
+  useScrollToBottom, 
+  useOrgGuard,
+  useElementHeight,
+} from "@/lib/hooks";
+
+import type { Doc } from "@/convex/_generated/dataModel";
+import type { ChatRole } from "@/convex/lib/types";
+
+// Group messages by role for visual clustering
+function groupMessages(messages: Doc<"thread_messages">[]) {
+  return messages.map((msg, i) => {
+    const prev = messages[i - 1];
+    const next = messages[i + 1];
+    const isFirst = !prev || prev.role !== msg.role;
+    const isLast = !next || next.role !== msg.role;
+    return { ...msg, isFirst, isLast };
+  });
+}
 
 export default function ThreadPage({ params }: { params: Promise<{ issueId: string }> }) {
   const { issueId } = React.use(params);
-  const { organization } = useOrganization();
+  const { organization, hasOrganization } = useOrgGuard({ shouldRedirect: false });
 
   // --------------------------------------------
-  // STATE + REFS
+  // STATE
   // --------------------------------------------
   const [input, setInput] = React.useState("");
   const [isSending, setIsSending] = React.useState(false);
   const [isAssistantReplying, setIsAssistantReplying] = React.useState(false);
-  const [showScrollButton, setShowScrollButton] = React.useState(false);
-
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const headerRef = React.useRef<HTMLDivElement | null>(null);
-  const composerRef = React.useRef<HTMLDivElement | null>(null);
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-
-  const [headerHeight, setHeaderHeight] = React.useState(0);
-  const [composerHeight, setComposerHeight] = React.useState(120);
 
   const creatingRef = React.useRef(false);
 
   // --------------------------------------------
+  // HOOKS
+  // --------------------------------------------
+  const textareaRef = useAutoGrowTextarea(input);
+  const { ref: headerRef, height: headerHeight } = useElementHeight<HTMLDivElement>();
+  const { ref: composerRef, height: composerHeight } = useElementHeight<HTMLDivElement>();
+  
+  // --------------------------------------------
   // CONVEX
   // --------------------------------------------
   const sendMessage = useMutation(api.thread_messages.sendMessage);
-  const sendQuickActionUserMessage = useMutation(
-    api.thread_messages.sendQuickActionUserMessage
-  );
+  const sendQuickActionUserMessage = useMutation(api.thread_messages.sendQuickActionUserMessage);
   const triggerReply = useAction(api.assistant.reply);
   const triggerQuickAction = useAction(api.assistant.quickAction);
   const createThread = useMutation(api.threads.create);
@@ -62,35 +77,16 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     organization ? { id: issueId as Id<"issues">, orgId: organization.id } : "skip"
   );
 
-  // --------------------------------------------
-  // MEASURE HEADER HEIGHT
-  // --------------------------------------------
-  React.useLayoutEffect(() => {
-    if (!headerRef.current) return;
-
-    const update = () => setHeaderHeight(headerRef.current!.offsetHeight);
-    update();
-
-    const ro = new ResizeObserver(update);
-    ro.observe(headerRef.current);
-
-    return () => ro.disconnect();
-  }, []);
-
-  // --------------------------------------------
-  // MEASURE COMPOSER HEIGHT
-  // --------------------------------------------
-  React.useLayoutEffect(() => {
-    if (!composerRef.current) return;
-
-    const update = () => setComposerHeight(composerRef.current!.offsetHeight);
-    update();
-
-    const ro = new ResizeObserver(update);
-    ro.observe(composerRef.current);
-
-    return () => ro.disconnect();
-  }, []);
+  // Use scroll hook with messages as dependency
+  const { 
+    scrollRef, 
+    showScrollButton, 
+    scrollToBottom, 
+    isNearBottom,
+    updateScrollButton,
+  } = useScrollToBottom({ 
+    dependencies: [messages, isAssistantReplying] 
+  });
 
   // --------------------------------------------
   // CREATE THREAD IF MISSING
@@ -103,98 +99,6 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
       });
     }
   }, [thread, issueId, createThread, organization]);
-
-  // --------------------------------------------
-  // SCROLL HELPERS
-  // --------------------------------------------
-  const scrollToBottom = React.useCallback(
-    (behavior: ScrollBehavior = "auto") => {
-      const el = scrollRef.current;
-      if (!el) return;
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior,
-      });
-    },
-    []
-  );
-
-  const updateScrollButton = React.useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const atBottom =
-      el.scrollTop + el.clientHeight >= el.scrollHeight - 12;
-
-    setShowScrollButton(!atBottom);
-  }, []);
-
-  // --- USER NEAR BOTTOM CHECK ---
-  const isUserNearBottom = React.useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return false;
-
-    return el.scrollHeight - (el.scrollTop + el.clientHeight) < 120;
-  }, []);
-
-  // --- NEW MESSAGES SCROLL ---
-  React.useEffect(() => {
-    if (!messages) return;
-
-    const raf = requestAnimationFrame(() => {
-      if (isUserNearBottom()) {
-        scrollToBottom("smooth");
-      }
-      updateScrollButton();
-    });
-
-    return () => cancelAnimationFrame(raf);
-  }, [messages, isUserNearBottom, scrollToBottom, updateScrollButton]);
-
-  // --- STREAMING SCROLLING (ChatGPT style) ---
-  React.useEffect(() => {
-    if (!isAssistantReplying) return;
-
-    const raf = requestAnimationFrame(() => {
-      if (isUserNearBottom()) {
-        scrollToBottom("smooth");
-      }
-      updateScrollButton();
-    });
-
-    return () => cancelAnimationFrame(raf);
-  }, [
-    isAssistantReplying,
-    messages,
-    isUserNearBottom,
-    scrollToBottom,
-    updateScrollButton,
-  ]);
-
-  // --------------------------------------------
-  // DETECT SCROLL BUTTON SHOW/HIDE
-  // --------------------------------------------
-  React.useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const handler = () => updateScrollButton();
-
-    el.addEventListener("scroll", handler);
-    handler(); // initial check
-
-    return () => el.removeEventListener("scroll", handler);
-  }, [updateScrollButton]);
-
-  // --------------------------------------------
-  // TEXTAREA AUTO-GROW
-  // --------------------------------------------
-  React.useEffect(() => {
-    if (!textareaRef.current) return;
-    const t = textareaRef.current;
-    t.style.height = "auto";
-    t.style.height = t.scrollHeight + "px";
-  }, [input]);
 
   // --------------------------------------------
   // SEND MESSAGE
@@ -230,14 +134,12 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
 
     setIsAssistantReplying(true);
 
-    // 1. First create a user-style message
     await sendQuickActionUserMessage({
       threadId: thread._id,
       instruction,
       orgId: organization.id,
     });
 
-    // 2. Then trigger the assistant reply
     await triggerQuickAction({
       threadId: thread._id,
       instruction,
@@ -253,7 +155,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   // --------------------------------------------
   // LOADING STATES
   // --------------------------------------------
-  if (!organization) {
+  if (!hasOrganization) {
     return <div className="p-6">Please select an organization…</div>;
   }
   
@@ -270,10 +172,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
       {/* HEADER */}
       <div
         ref={headerRef}
-        className="
-          fixed top-0 left-0 right-0 z-20 flex justify-center
-          pointer-events-none
-        "
+        className="fixed top-0 left-0 right-0 z-20 flex justify-center pointer-events-none"
       >
         <div
           className="
@@ -287,10 +186,8 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
           <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
             {issue.title}
           </h1>
-
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Issue #{issueId.slice(-6)} •{" "}
-            {new Date(issue.created_at).toLocaleDateString()}
+            Issue #{issueId.slice(-6)} • {new Date(issue.created_at).toLocaleDateString()}
           </p>
         </div>
       </div>
@@ -309,14 +206,12 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
         ) : (() => {
           const grouped = groupMessages(messages);
           
-          // Find the last assistant message index
           const lastAssistantIndex = [...grouped].reverse().findIndex(
             (m) => m.role === "assistant"
           );
           const realIndex =
             lastAssistantIndex === -1 ? -1 : grouped.length - 1 - lastAssistantIndex;
 
-          // Quick actions to show on last assistant message
           const actions = [
             "Summarize",
             "Suggest Fix",
@@ -385,24 +280,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
               focus:outline-none focus:ring-2 focus:ring-blue-500
             "
           />
-
-          <button
-            type="submit"
-            disabled={!input.trim() || isSending}
-            className="
-              rounded-full p-3 bg-blue-600 text-white shadow 
-              hover:bg-blue-500 transition disabled:opacity-50
-            "
-          >
-            <svg
-              className="h-4 w-4 rotate-45"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path strokeWidth={2} d="M5 12l14-7-7 14-2-5-5-2z" />
-            </svg>
-          </button>
+          <SendButton disabled={!input.trim() || isSending} />
         </form>
       </div>
     </div>

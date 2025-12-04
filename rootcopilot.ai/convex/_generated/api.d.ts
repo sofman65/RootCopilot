@@ -19,6 +19,8 @@ import type * as importPipelineInternal from "../importPipelineInternal.js";
 import type * as integrations from "../integrations.js";
 import type * as issues from "../issues.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_tenant from "../lib/tenant.js";
+import type * as lib_types from "../lib/types.js";
 import type * as messages from "../messages.js";
 import type * as projects from "../projects.js";
 import type * as rag from "../rag.js";
@@ -55,6 +57,8 @@ declare const fullApi: ApiFromModules<{
   integrations: typeof integrations;
   issues: typeof issues;
   "lib/auth": typeof lib_auth;
+  "lib/tenant": typeof lib_tenant;
+  "lib/types": typeof lib_types;
   messages: typeof messages;
   projects: typeof projects;
   rag: typeof rag;

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useOrganization } from "@clerk/nextjs";
-import { Id } from "@/convex/_generated/dataModel";
+import { Id, Doc } from "@/convex/_generated/dataModel";
 import {
   IconPlus,
   IconBuilding,
@@ -24,16 +24,15 @@ import {
 } from "@tabler/icons-react";
 import ImportModal from "@/components/workspace/ImportModal";
 import IntegrationSettings from "@/components/workspace/IntegrationSettings";
+import { StatusBadge } from "@/components/shared";
+
+import type { EnvName, IssueStatus, IssuePriority } from "@/convex/lib/types";
 
 // Dynamically import RichTextEditor to avoid SSR issues
 const RichTextEditor = dynamic(() => import("@/components/RichTextEditor"), {
   ssr: false,
   loading: () => <div className="h-32 bg-neutral-100 dark:bg-neutral-700 rounded-lg animate-pulse" />,
 });
-
-type EnvName = "PROD" | "UAT" | "SIT" | "PRE-SIT" | "DEV";
-type IssueStatus = "open" | "in_progress" | "resolved" | "closed";
-type IssuePriority = "critical" | "high" | "medium" | "low";
 
 export default function WorkspacePage() {
   const { organization } = useOrganization();
@@ -160,60 +159,55 @@ export default function WorkspacePage() {
     setNewIssueTitle("");
   };
 
-  // Handlers - Delete
-  const handleDeleteClient = async (id: Id<"clients">, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!organization || !confirm("Delete this client and all its projects, environments, and issues?")) return;
+  // Handlers - Delete with shared pattern
+  const handleDelete = async <T extends Id<"clients"> | Id<"projects"> | Id<"environments"> | Id<"issues">>(
+    id: T,
+    deleteFn: (args: { id: T; orgId: string }) => Promise<void>,
+    confirmMessage: string,
+    onSuccess?: () => void
+  ) => {
+    if (!organization || !confirm(confirmMessage)) return;
     setDeletingId(id);
     try {
-      await deleteClient({ id, orgId: organization.id });
+      await deleteFn({ id, orgId: organization.id });
+      onSuccess?.();
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteClient = (id: Id<"clients">, e: React.MouseEvent) => {
+    e.stopPropagation();
+    handleDelete(id, deleteClient, "Delete this client and all its projects, environments, and issues?", () => {
       if (selectedClient === id) {
         setSelectedClient(null);
         setSelectedProject(null);
         setSelectedEnv(null);
       }
-    } finally {
-      setDeletingId(null);
-    }
+    });
   };
 
-  const handleDeleteProject = async (id: Id<"projects">, e: React.MouseEvent) => {
+  const handleDeleteProject = (id: Id<"projects">, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!organization || !confirm("Delete this project and all its environments and issues?")) return;
-    setDeletingId(id);
-    try {
-      await deleteProject({ id, orgId: organization.id });
+    handleDelete(id, deleteProject, "Delete this project and all its environments and issues?", () => {
       if (selectedProject === id) {
         setSelectedProject(null);
         setSelectedEnv(null);
       }
-    } finally {
-      setDeletingId(null);
-    }
+    });
   };
 
-  const handleDeleteEnvironment = async (id: Id<"environments">, e: React.MouseEvent) => {
+  const handleDeleteEnvironment = (id: Id<"environments">, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!organization || !confirm("Delete this environment and all its issues?")) return;
-    setDeletingId(id);
-    try {
-      await deleteEnvironment({ id, orgId: organization.id });
+    handleDelete(id, deleteEnvironment, "Delete this environment and all its issues?", () => {
       if (selectedEnv === id) {
         setSelectedEnv(null);
       }
-    } finally {
-      setDeletingId(null);
-    }
+    });
   };
 
-  const handleDeleteIssue = async (id: Id<"issues">) => {
-    if (!organization || !confirm("Delete this issue?")) return;
-    setDeletingId(id);
-    try {
-      await deleteIssue({ id, orgId: organization.id });
-    } finally {
-      setDeletingId(null);
-    }
+  const handleDeleteIssue = (id: Id<"issues">) => {
+    handleDelete(id, deleteIssue, "Delete this issue?");
   };
 
   const handleSeed = async () => {
@@ -223,7 +217,7 @@ export default function WorkspacePage() {
     try {
       const result = await seedWorkspace({ orgId: organization.id });
       setSeedResult(`Created ${result.seededIssues} sample issues`);
-    } catch (err) {
+    } catch {
       setSeedResult("Seed completed (or data already exists)");
     } finally {
       setIsSeeding(false);
@@ -243,6 +237,21 @@ export default function WorkspacePage() {
       </div>
     );
   }
+
+  // Shared delete button component
+  const DeleteButton = ({ onClick, isDeleting }: { onClick: (e: React.MouseEvent) => void; isDeleting: boolean }) => (
+    <button
+      onClick={onClick}
+      disabled={isDeleting}
+      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
+    >
+      {isDeleting ? (
+        <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
+      ) : (
+        <IconTrash className="h-3.5 w-3.5 text-red-500" />
+      )}
+    </button>
+  );
 
   return (
     <div className="h-full overflow-y-auto">
@@ -367,7 +376,7 @@ export default function WorkspacePage() {
             </div>
 
             <div className="space-y-1 max-h-40 overflow-y-auto">
-              {clients?.map((client) => (
+              {clients?.map((client: Doc<"clients">) => (
                 <div
                   key={client._id}
                   onClick={() => {
@@ -382,17 +391,7 @@ export default function WorkspacePage() {
                   }`}
                 >
                   <span className="truncate">{client.name}</span>
-                  <button
-                    onClick={(e) => handleDeleteClient(client._id, e)}
-                    disabled={deletingId === client._id}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
-                  >
-                    {deletingId === client._id ? (
-                      <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
-                    ) : (
-                      <IconTrash className="h-3.5 w-3.5 text-red-500" />
-                    )}
-                  </button>
+                  <DeleteButton onClick={(e) => handleDeleteClient(client._id, e)} isDeleting={deletingId === client._id} />
                 </div>
               ))}
               {(!clients || clients.length === 0) && (
@@ -408,7 +407,7 @@ export default function WorkspacePage() {
               Projects
               {selectedClient && (
                 <span className="text-xs text-neutral-400 ml-auto">
-                  for {clients?.find(c => c._id === selectedClient)?.name}
+                  for {clients?.find((c: Doc<"clients">) => c._id === selectedClient)?.name}
                 </span>
               )}
             </h3>
@@ -434,7 +433,7 @@ export default function WorkspacePage() {
                 </div>
 
                 <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {projects?.map((project) => (
+                  {projects?.map((project: Doc<"projects">) => (
                     <div
                       key={project._id}
                       onClick={() => {
@@ -455,17 +454,7 @@ export default function WorkspacePage() {
                           </span>
                         )}
                       </div>
-                      <button
-                        onClick={(e) => handleDeleteProject(project._id, e)}
-                        disabled={deletingId === project._id}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
-                      >
-                        {deletingId === project._id ? (
-                          <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
-                        ) : (
-                          <IconTrash className="h-3.5 w-3.5 text-red-500" />
-                        )}
-                      </button>
+                      <DeleteButton onClick={(e) => handleDeleteProject(project._id, e)} isDeleting={deletingId === project._id} />
                     </div>
                   ))}
                   {(!projects || projects.length === 0) && (
@@ -485,7 +474,7 @@ export default function WorkspacePage() {
               Environments
               {selectedProject && (
                 <span className="text-xs text-neutral-400 ml-auto">
-                  for {projects?.find(p => p._id === selectedProject)?.name}
+                  for {projects?.find((p: Doc<"projects">) => p._id === selectedProject)?.name}
                 </span>
               )}
             </h3>
@@ -513,7 +502,7 @@ export default function WorkspacePage() {
                 </div>
 
                 <div className="space-y-1 max-h-40 overflow-y-auto">
-                  {environments?.map((env) => (
+                  {environments?.map((env: Doc<"environments">) => (
                     <div
                       key={env._id}
                       onClick={() => setSelectedEnv(env._id)}
@@ -524,17 +513,7 @@ export default function WorkspacePage() {
                       }`}
                     >
                       <span className="truncate">{env.name}</span>
-                      <button
-                        onClick={(e) => handleDeleteEnvironment(env._id, e)}
-                        disabled={deletingId === env._id}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
-                      >
-                        {deletingId === env._id ? (
-                          <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
-                        ) : (
-                          <IconTrash className="h-3.5 w-3.5 text-red-500" />
-                        )}
-                      </button>
+                      <DeleteButton onClick={(e) => handleDeleteEnvironment(env._id, e)} isDeleting={deletingId === env._id} />
                     </div>
                   ))}
                   {(!environments || environments.length === 0) && (
@@ -555,7 +534,7 @@ export default function WorkspacePage() {
                 Issues
                 {selectedEnv && (
                   <span className="text-xs text-neutral-400 ml-2">
-                    for {environments?.find(e => e._id === selectedEnv)?.name}
+                    for {environments?.find((e: Doc<"environments">) => e._id === selectedEnv)?.name}
                   </span>
                 )}
               </h3>
@@ -603,7 +582,7 @@ export default function WorkspacePage() {
                 </div>
 
                 <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {issues?.map((issue) => (
+                  {issues?.map((issue: Doc<"issues">) => (
                     <div
                       key={issue._id}
                       className="group flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-neutral-50 dark:bg-neutral-700/50"
@@ -616,15 +595,7 @@ export default function WorkspacePage() {
                         )}
                         <span className="truncate">{issue.title}</span>
                         {issue.status && issue.status !== "unknown" && (
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                            issue.status === "open" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300" :
-                            issue.status === "in_progress" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300" :
-                            issue.status === "resolved" ? "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300" :
-                            issue.status === "closed" ? "bg-neutral-100 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300" :
-                            "bg-neutral-100 text-neutral-600"
-                          }`}>
-                            {issue.status.replace("_", " ")}
-                          </span>
+                          <StatusBadge status={issue.status} />
                         )}
                         {issue.externalUrl && (
                           <a
@@ -638,17 +609,7 @@ export default function WorkspacePage() {
                           </a>
                         )}
                       </div>
-                      <button
-                        onClick={() => handleDeleteIssue(issue._id)}
-                        disabled={deletingId === issue._id}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition"
-                      >
-                        {deletingId === issue._id ? (
-                          <IconLoader className="h-3.5 w-3.5 animate-spin text-red-500" />
-                        ) : (
-                          <IconTrash className="h-3.5 w-3.5 text-red-500" />
-                        )}
-                      </button>
+                      <DeleteButton onClick={() => handleDeleteIssue(issue._id)} isDeleting={deletingId === issue._id} />
                     </div>
                   ))}
                   {(!issues || issues.length === 0) && (
@@ -764,26 +725,7 @@ export default function WorkspacePage() {
                     setIssueDescription(json);
                     setIssueDescriptionHtml(html);
                   }}
-                  placeholder="Describe the issue in detail...
-
-## Issue Summary
-What is happening?
-
-## Steps to Reproduce
-1. First step
-2. Second step
-3. See error
-
-## Expected Behavior
-What should happen?
-
-## Actual Behavior
-What is happening instead?
-
-## Logs / Error Messages
-```
-Paste relevant logs here
-```"
+                  placeholder="Describe the issue in detail..."
                 />
               </div>
             </div>

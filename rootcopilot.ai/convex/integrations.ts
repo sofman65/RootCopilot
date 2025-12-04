@@ -1,14 +1,12 @@
-import { query, mutation, action } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { requireOrgId, getOrgId } from "./lib/auth";
-import { api } from "./_generated/api";
-
-// Provider type validator
-const providerType = v.union(
-  v.literal("jira"),
-  v.literal("linear"),
-  v.literal("azure")
-);
+import { 
+  getTenant,
+  ensureTenantId,
+  getWithTenantCheck,
+  requireWithTenantCheck,
+} from "./lib/tenant";
+import { providerValidator, integrationStatusValidator } from "./lib/types";
 
 // ========================
 // QUERIES
@@ -18,15 +16,8 @@ export const list = query({
   args: {
     orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return [];
-
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-
+  handler: async (ctx, { orgId }) => {
+    const tenant = await getTenant(ctx, orgId);
     if (!tenant) return [];
 
     return ctx.db
@@ -41,20 +32,9 @@ export const getById = query({
     id: v.id("integrations"),
     orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { id, orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return null;
-
-    const integration = await ctx.db.get(id);
+  handler: async (ctx, { id, orgId }) => {
+    const integration = await getWithTenantCheck(ctx, "integrations", id, orgId);
     if (!integration) return null;
-
-    // Verify tenant access
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-
-    if (!tenant || integration.tenantId !== tenant._id) return null;
 
     // Don't expose tokens in queries
     return {
@@ -67,18 +47,11 @@ export const getById = query({
 
 export const getByProvider = query({
   args: {
-    provider: providerType,
+    provider: providerValidator,
     orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { provider, orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return [];
-
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-
+  handler: async (ctx, { provider, orgId }) => {
+    const tenant = await getTenant(ctx, orgId);
     if (!tenant) return [];
 
     const integrations = await ctx.db
@@ -103,7 +76,7 @@ export const getByProvider = query({
 
 export const create = mutation({
   args: {
-    provider: providerType,
+    provider: providerValidator,
     name: v.string(),
     baseUrl: v.optional(v.string()),
     accessToken: v.string(),
@@ -114,10 +87,9 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const { orgId, ...data } = args;
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
+    const tenantId = await ensureTenantId(ctx, orgId);
 
-    return await ctx.db.insert("integrations", {
+    return ctx.db.insert("integrations", {
       tenantId,
       provider: data.provider,
       name: data.name,
@@ -141,20 +113,12 @@ export const update = mutation({
     refreshToken: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
     config: v.optional(v.any()),
-    status: v.optional(
-      v.union(v.literal("active"), v.literal("expired"), v.literal("error"))
-    ),
+    status: v.optional(integrationStatusValidator),
     orgId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, orgId, ...updates } = args;
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-
-    const integration = await ctx.db.get(id);
-    if (!integration || integration.tenantId !== tenantId) {
-      throw new Error("Integration not found or unauthorized");
-    }
+    await requireWithTenantCheck(ctx, "integrations", id, orgId, "Integration not found or unauthorized");
 
     // Filter out undefined values
     const patch: Record<string, unknown> = {};
@@ -172,13 +136,7 @@ export const remove = mutation({
     orgId: v.optional(v.string()),
   },
   handler: async (ctx, { id, orgId }) => {
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-
-    const integration = await ctx.db.get(id);
-    if (!integration || integration.tenantId !== tenantId) {
-      throw new Error("Integration not found or unauthorized");
-    }
+    await requireWithTenantCheck(ctx, "integrations", id, orgId, "Integration not found or unauthorized");
 
     // Delete associated mappings
     const mappings = await ctx.db
@@ -200,14 +158,7 @@ export const updateLastSync = mutation({
     orgId: v.optional(v.string()),
   },
   handler: async (ctx, { id, orgId }) => {
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-
-    const integration = await ctx.db.get(id);
-    if (!integration || integration.tenantId !== tenantId) {
-      throw new Error("Integration not found or unauthorized");
-    }
-
+    await requireWithTenantCheck(ctx, "integrations", id, orgId, "Integration not found or unauthorized");
     await ctx.db.patch(id, { lastSyncAt: Date.now() });
   },
 });
@@ -221,15 +172,8 @@ export const listMappings = query({
     integrationId: v.optional(v.id("integrations")),
     orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { integrationId, orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return [];
-
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-
+  handler: async (ctx, { integrationId, orgId }) => {
+    const tenant = await getTenant(ctx, orgId);
     if (!tenant) return [];
 
     if (integrationId) {
@@ -265,22 +209,19 @@ export const createMapping = mutation({
   },
   handler: async (ctx, args) => {
     const { orgId, ...data } = args;
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
+    const tenantId = await ensureTenantId(ctx, orgId);
 
     // Verify integration belongs to tenant
-    const integration = await ctx.db.get(data.integrationId);
-    if (!integration || integration.tenantId !== tenantId) {
-      throw new Error("Integration not found or unauthorized");
-    }
+    const { item: integration } = await requireWithTenantCheck(
+      ctx, "integrations", data.integrationId, orgId, 
+      "Integration not found or unauthorized"
+    );
 
     // If this is the default, unset other defaults
     if (data.isDefault) {
       const existingMappings = await ctx.db
         .query("mappings")
-        .withIndex("by_integration", (q) =>
-          q.eq("integrationId", data.integrationId)
-        )
+        .withIndex("by_integration", (q) => q.eq("integrationId", data.integrationId))
         .collect();
 
       for (const m of existingMappings) {
@@ -290,7 +231,7 @@ export const createMapping = mutation({
       }
     }
 
-    return await ctx.db.insert("mappings", {
+    return ctx.db.insert("mappings", {
       tenantId,
       integrationId: data.integrationId,
       name: data.name,
@@ -322,21 +263,16 @@ export const updateMapping = mutation({
   },
   handler: async (ctx, args) => {
     const { id, orgId, ...updates } = args;
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-
-    const mapping = await ctx.db.get(id);
-    if (!mapping || mapping.tenantId !== tenantId) {
-      throw new Error("Mapping not found or unauthorized");
-    }
+    const { item: mapping } = await requireWithTenantCheck(
+      ctx, "mappings", id, orgId, 
+      "Mapping not found or unauthorized"
+    );
 
     // If setting as default, unset others
     if (updates.isDefault) {
       const existingMappings = await ctx.db
         .query("mappings")
-        .withIndex("by_integration", (q) =>
-          q.eq("integrationId", mapping.integrationId)
-        )
+        .withIndex("by_integration", (q) => q.eq("integrationId", mapping.integrationId))
         .collect();
 
       for (const m of existingMappings) {
@@ -361,14 +297,7 @@ export const deleteMapping = mutation({
     orgId: v.optional(v.string()),
   },
   handler: async (ctx, { id, orgId }) => {
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-
-    const mapping = await ctx.db.get(id);
-    if (!mapping || mapping.tenantId !== tenantId) {
-      throw new Error("Mapping not found or unauthorized");
-    }
-
+    await requireWithTenantCheck(ctx, "mappings", id, orgId, "Mapping not found or unauthorized");
     await ctx.db.delete(id);
   },
 });
@@ -379,7 +308,7 @@ export const deleteMapping = mutation({
 
 export const getDefaultMapping = query({
   args: {
-    provider: providerType,
+    provider: providerValidator,
   },
   handler: async (_, { provider }) => {
     // Return sensible defaults for each provider
@@ -427,4 +356,3 @@ export const getDefaultMapping = query({
     }
   },
 });
-

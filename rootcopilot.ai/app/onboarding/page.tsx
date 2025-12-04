@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useOrganization, useOrganizationList, CreateOrganization } from "@clerk/nextjs";
 import { IconSparkles, IconCheck, IconArrowRight } from "@tabler/icons-react";
+import { LoadingSkeleton } from "@/components/shared";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -32,14 +33,7 @@ export default function OnboardingPage() {
   };
 
   if (!orgLoaded || !listLoaded) {
-    return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-neutral-950">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-neutral-800" />
-          <div className="w-32 h-4 rounded bg-neutral-800" />
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton variant="page" />;
   }
 
   return (
@@ -149,9 +143,6 @@ export default function OnboardingPage() {
             afterCreateOrganizationUrl="/welcome"
           />
         </div>
-
-        
-      
       </main>
     </div>
   );
@@ -195,4 +186,3 @@ function Step({
 function StepConnector() {
   return <div className="w-16 h-0.5 bg-neutral-800 mt-[-20px]" />;
 }
-

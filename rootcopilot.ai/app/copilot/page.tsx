@@ -1,33 +1,28 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useOrganization } from "@clerk/nextjs";
 import { Id } from "@/convex/_generated/dataModel";
 
 import { ChatBubble } from "@/components/ChatBubble";
 import TypingBubble from "@/components/TypingBubble";
+import { LoadingSkeleton, SendButton, FileIcon, StatusIcon } from "@/components/shared";
+import { useAutoGrowTextarea, useScrollToBottom, useOrgGuard } from "@/lib/hooks";
+
 import { 
   IconSparkles, 
   IconUpload, 
   IconInfoCircle, 
   IconBook2, 
   IconRefresh,
-  IconFile,
-  IconFileTypePdf,
-  IconFileTypeDoc,
-  IconPhoto,
-  IconCheck,
-  IconLoader,
-  IconAlertCircle,
 } from "@tabler/icons-react";
+
+import type { ChatRole, FileStatus } from "@/convex/lib/types";
 
 // ------------------------------
 // TYPES
 // ------------------------------
-type ChatRole = "user" | "assistant";
 interface LocalMessage {
   id: string;
   role: ChatRole;
@@ -45,16 +40,16 @@ interface RagEntry {
 interface UploadedFile {
   id: Id<"files">;
   name: string;
-  status: "pending" | "processing" | "ready" | "error";
+  status: FileStatus;
 }
 
 // ------------------------------
 // COMPONENT
 // ------------------------------
 export default function CopilotPage() {
-  const { organization } = useOrganization();
+  const { organization, hasOrganization } = useOrgGuard();
   
-  // CHAT
+  // CHAT STATE
   const [input, setInput] = React.useState("");
   const [messages, setMessages] = React.useState<LocalMessage[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -64,8 +59,9 @@ export default function CopilotPage() {
     doc: { name?: string; namespace: string } | null;
   }>>([]);
 
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  // HOOKS
+  const textareaRef = useAutoGrowTextarea(input);
+  const { scrollRef } = useScrollToBottom({ dependencies: [messages, isLoading] });
 
   // RAG ACTIONS
   const addDoc = useAction(api.rag.addDocument);
@@ -80,10 +76,10 @@ export default function CopilotPage() {
   // FILES LIST
   const files = useQuery(api.files.listFiles, {});
   
-  // DEBUG: Check identity claims
+  // DEBUG
   const identity = useQuery(api.debug.getIdentity);
 
-  // INDEXED DOCS LIST (fetched via action)
+  // INDEXED DOCS LIST
   const [docs, setDocs] = React.useState<RagEntry[]>([]);
   const [loadingDocs, setLoadingDocs] = React.useState(false);
 
@@ -101,7 +97,7 @@ export default function CopilotPage() {
     try {
       const entries = await listEntries({ 
         namespace: namespace || undefined,
-        orgId: organization.id, // Pass org ID from client
+        orgId: organization.id,
       });
       setDocs(entries);
     } catch (err) {
@@ -115,22 +111,7 @@ export default function CopilotPage() {
     if (organization) {
       fetchDocs();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization]);
-
-  // ------------------------------
-  // UI AUTO EFFECTS
-  // ------------------------------
-  React.useEffect(() => {
-    if (!textareaRef.current) return;
-    textareaRef.current.style.height = "auto";
-    textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-  }, [input]);
-
-  React.useEffect(() => {
-    if (!scrollRef.current) return;
-    scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [organization, fetchDocs]);
 
   // ------------------------------
   // SEND MESSAGE
@@ -139,7 +120,6 @@ export default function CopilotPage() {
     const q = input.trim();
     if (!q) return;
 
-    // push user message
     const now = Date.now();
     setMessages((prev) => [
       ...prev,
@@ -154,7 +134,7 @@ export default function CopilotPage() {
       const res = await ask({ 
         question: q, 
         namespace: namespace || undefined,
-        orgId: organization?.id, // Pass org ID from client
+        orgId: organization?.id,
       });
 
       setMessages((prev) => [
@@ -194,34 +174,24 @@ export default function CopilotPage() {
     setUploadStatus(null);
     const newUploadedFiles: UploadedFile[] = [];
 
+    const textExtensions = [".txt", ".md", ".mdx", ".json", ".csv", ".xml", ".yaml", ".yml", ".log"];
+
     for (const f of Array.from(fileList)) {
       try {
-        // Check if it's a text file that can be read directly
-        const isTextFile = 
-          f.type.startsWith("text/") ||
-          f.name.endsWith(".txt") ||
-          f.name.endsWith(".md") ||
-          f.name.endsWith(".mdx") ||
-          f.name.endsWith(".json") ||
-          f.name.endsWith(".csv") ||
-          f.name.endsWith(".xml") ||
-          f.name.endsWith(".yaml") ||
-          f.name.endsWith(".yml") ||
-          f.name.endsWith(".log");
+        const isTextFile = f.type.startsWith("text/") || 
+          textExtensions.some(ext => f.name.endsWith(ext));
 
         if (isTextFile) {
-          // Read text directly and add to RAG
           const txt = await f.text();
           if (txt.trim()) {
             await addDoc({
               name: f.name,
               text: txt,
               namespace: namespace || undefined,
-              orgId: organization.id, // Pass org ID from client
+              orgId: organization.id,
             });
           }
         } else {
-          // Upload to storage and process with OCR
           const uploadUrl = await generateUploadUrl();
           
           const uploadResult = await fetch(uploadUrl, {
@@ -230,13 +200,10 @@ export default function CopilotPage() {
             body: f,
           });
 
-          if (!uploadResult.ok) {
-            throw new Error("Upload failed");
-          }
+          if (!uploadResult.ok) throw new Error("Upload failed");
 
           const { storageId } = await uploadResult.json();
           
-          // Save file metadata
           const fileId = await saveFile({
             storageId,
             name: f.name,
@@ -245,29 +212,19 @@ export default function CopilotPage() {
             namespace: namespace || undefined,
           });
 
-          newUploadedFiles.push({
-            id: fileId,
-            name: f.name,
-            status: "pending",
-          });
+          newUploadedFiles.push({ id: fileId, name: f.name, status: "pending" });
 
-          // Process file (OCR + RAG) in background
-          processFile({ 
-            fileId, 
-            namespace: namespace || undefined 
-          }).then(() => {
-            setUploadedFiles(prev => 
-              prev.map(uf => 
-                uf.id === fileId ? { ...uf, status: "ready" as const } : uf
-              )
-            );
-          }).catch(() => {
-            setUploadedFiles(prev => 
-              prev.map(uf => 
-                uf.id === fileId ? { ...uf, status: "error" as const } : uf
-              )
-            );
-          });
+          processFile({ fileId, namespace: namespace || undefined })
+            .then(() => {
+              setUploadedFiles(prev => 
+                prev.map(uf => uf.id === fileId ? { ...uf, status: "ready" as const } : uf)
+              );
+            })
+            .catch(() => {
+              setUploadedFiles(prev => 
+                prev.map(uf => uf.id === fileId ? { ...uf, status: "error" as const } : uf)
+              );
+            });
         }
       } catch (err) {
         console.error(`Failed to process ${f.name}:`, err);
@@ -278,53 +235,16 @@ export default function CopilotPage() {
     setUploadStatus(`Processing ${fileList.length} file(s)...`);
     setUploading(false);
     
-    // Refresh docs list
     setTimeout(fetchDocs, 2000);
   };
-
-  // Get file icon based on type
-  const getFileIcon = (name: string) => {
-    const lower = name.toLowerCase();
-    if (lower.endsWith(".pdf")) return <IconFileTypePdf className="h-4 w-4" />;
-    if (lower.endsWith(".doc") || lower.endsWith(".docx")) return <IconFileTypeDoc className="h-4 w-4" />;
-    if (lower.match(/\.(png|jpg|jpeg|gif|webp)$/)) return <IconPhoto className="h-4 w-4" />;
-    return <IconFile className="h-4 w-4" />;
-  };
-
-  // Get status icon
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "ready": return <IconCheck className="h-3 w-3 text-green-500" />;
-      case "processing": return <IconLoader className="h-3 w-3 text-blue-500 animate-spin" />;
-      case "error": return <IconAlertCircle className="h-3 w-3 text-red-500" />;
-      default: return <IconLoader className="h-3 w-3 text-neutral-400" />;
-    }
-  };
-
-  const router = useRouter();
 
   // ------------------------------
   // RENDER
   // ------------------------------
-  // Redirect to onboarding if no organization
-  React.useEffect(() => {
-    if (!organization) {
-      router.push("/onboarding");
-    }
-  }, [organization, router]);
-
-  if (!organization) {
-    return (
-      <div className="flex h-full w-full items-center justify-center">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-neutral-200 dark:bg-neutral-800" />
-          <div className="w-32 h-4 rounded bg-neutral-200 dark:bg-neutral-800" />
-        </div>
-      </div>
-    );
+  if (!hasOrganization) {
+    return <LoadingSkeleton variant="centered" />;
   }
 
-  // DEBUG: Log identity claims
   if (identity) {
     console.log("Identity claims:", identity);
   }
@@ -342,7 +262,7 @@ export default function CopilotPage() {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-white">
-                RootCopilot — {organization.name}
+                RootCopilot — {organization?.name}
               </h1>
               <p className="text-xs text-neutral-400">
                 Ask anything about your indexed docs, logs, configs, or knowledge base.
@@ -416,20 +336,7 @@ export default function CopilotPage() {
               className="flex-1 resize-none rounded-2xl border border-neutral-700 bg-neutral-800 text-white px-4 py-3 text-sm shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-neutral-500"
               placeholder="Ask RootCopilot…"
             />
-
-            <button
-              disabled={!input.trim() || isLoading}
-              className="rounded-full p-3 bg-blue-600 text-white shadow hover:bg-blue-500 transition disabled:opacity-40"
-            >
-              <svg
-                className="h-4 w-4 rotate-45"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeWidth={2} d="M5 12l14-7-7 14-2-5-5-2z" />
-              </svg>
-            </button>
+            <SendButton disabled={!input.trim() || isLoading} />
           </form>
         </div>
       </div>
@@ -490,9 +397,9 @@ export default function CopilotPage() {
                     key={f.id}
                     className="flex items-center gap-2 rounded border border-neutral-800 px-2 py-1 text-neutral-300"
                   >
-                    {getFileIcon(f.name)}
+                    <FileIcon name={f.name} className="h-4 w-4" />
                     <span className="flex-1 truncate text-[11px]">{f.name}</span>
-                    {getStatusIcon(f.status)}
+                    <StatusIcon status={f.status} className="h-3 w-3" />
                   </div>
                 ))}
               </div>
@@ -513,23 +420,17 @@ export default function CopilotPage() {
             </div>
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {docs.map((d) => (
-                <div
-                  key={d.entryId}
-                  className="rounded border border-neutral-800 px-2 py-1"
-                >
+                <div key={d.entryId} className="rounded border border-neutral-800 px-2 py-1">
                   <div className="text-[11px] font-medium truncate text-neutral-200">{d.title ?? "Untitled"}</div>
                   <div className="text-[10px] text-neutral-500">
-                    {d.namespace ?? "global"} •{" "}
-                    {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : ""}
+                    {d.namespace ?? "global"} • {d.createdAt ? new Date(d.createdAt).toLocaleDateString() : ""}
                   </div>
                 </div>
               ))}
               {docs.length === 0 && !loadingDocs && (
                 <p className="text-neutral-500 text-[11px]">No entries yet</p>
               )}
-              {loadingDocs && (
-                <p className="text-neutral-500 text-[11px]">Loading...</p>
-              )}
+              {loadingDocs && <p className="text-neutral-500 text-[11px]">Loading...</p>}
             </div>
           </section>
 
@@ -543,9 +444,9 @@ export default function CopilotPage() {
                     key={f._id}
                     className="flex items-center gap-2 rounded border border-neutral-800 px-2 py-1 text-neutral-300"
                   >
-                    {getFileIcon(f.name)}
+                    <FileIcon name={f.name} className="h-4 w-4" />
                     <span className="flex-1 truncate text-[11px]">{f.name}</span>
-                    {getStatusIcon(f.status ?? "pending")}
+                    <StatusIcon status={f.status ?? "pending"} className="h-3 w-3" />
                   </div>
                 ))}
               </div>
@@ -557,14 +458,10 @@ export default function CopilotPage() {
             <section>
               <p className="text-[11px] font-semibold mb-1 text-neutral-300">Sources from last answer</p>
               {sources.map((s, i) => (
-                <div
-                  key={i}
-                  className="rounded border border-blue-900 px-2 py-1 bg-blue-950/40"
-                >
+                <div key={i} className="rounded border border-blue-900 px-2 py-1 bg-blue-950/40">
                   <div className="text-[11px] font-medium text-blue-300">{s.doc?.name ?? "Unknown"}</div>
                   <div className="text-[10px] text-neutral-500">
-                    {s.doc?.namespace ?? "global"} •{" "}
-                    score {s.score.toFixed(3)}
+                    {s.doc?.namespace ?? "global"} • score {s.score.toFixed(3)}
                   </div>
                 </div>
               ))}

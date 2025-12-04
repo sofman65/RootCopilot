@@ -6,7 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 
-export function groupMessages<T extends { role: string; created_at?: number; timestamp?: number }>(messages: T[]) {
+export function groupMessages<T extends { role: string; created_at?: number; timestamp?: number }>(
+  messages: T[]
+): (T & { isFirst: boolean; isLast: boolean })[] {
   return messages.map((msg, i) => {
     const prev = messages[i - 1];
     const next = messages[i + 1];

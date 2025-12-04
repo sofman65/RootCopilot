@@ -1,77 +1,58 @@
-import { query, mutation } from './_generated/server'
-import { v } from 'convex/values'
-import { requireOrgId, getOrgId } from './lib/auth'
-import { api } from './_generated/api'
+import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { 
+  getTenant,
+  ensureTenantId,
+  getWithTenantCheck,
+  verifyParentTenant,
+} from "./lib/tenant";
 
 export const getByIssue = query({
-  args: { 
-    issueId: v.id('issues'),
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  args: {
+    issueId: v.id("issues"),
+    orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { issueId, orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return null;
-    
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-    
+  handler: async (ctx, { issueId, orgId }) => {
+    const tenant = await getTenant(ctx, orgId);
     if (!tenant) return null;
-    
+
     // Verify issue belongs to tenant
     const issue = await ctx.db.get(issueId);
     if (!issue || issue.tenantId !== tenant._id) return null;
-    
+
     return ctx.db
-      .query('threads')
-      .withIndex('by_issue', (q) => q.eq('issue_id', issueId))
+      .query("threads")
+      .withIndex("by_issue", (q) => q.eq("issue_id", issueId))
       .unique();
   },
-})
+});
 
 export const create = mutation({
-  args: { 
-    issueId: v.id('issues'),
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  args: {
+    issueId: v.id("issues"),
+    orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { issueId, orgId }): Promise<import('./_generated/dataModel').Id<'threads'>> => {
-    await requireOrgId(ctx, orgId);
-    const tenantId = await ctx.runMutation(api.tenants.ensureTenant, { orgId });
-    
+  handler: async (ctx, { issueId, orgId }) => {
+    const tenantId = await ensureTenantId(ctx, orgId);
+
     // Verify issue belongs to tenant
-    const issue = await ctx.db.get(issueId);
-    if (!issue || issue.tenantId !== tenantId) {
-      throw new Error('Issue not found or unauthorized');
+    if (!await verifyParentTenant(ctx, issueId, tenantId)) {
+      throw new Error("Issue not found or unauthorized");
     }
-    
-    return await ctx.db.insert('threads', { 
+
+    return ctx.db.insert("threads", {
       tenantId,
       issue_id: issueId,
     });
   },
-})
+});
 
 export const getById = query({
-  args: { 
-    id: v.id('threads'),
-    orgId: v.optional(v.string()), // Pass from client-side Clerk
+  args: {
+    id: v.id("threads"),
+    orgId: v.optional(v.string()),
   },
-  handler: async (ctx, { id, orgId: passedOrgId }) => {
-    const orgId = await getOrgId(ctx, passedOrgId);
-    if (!orgId) return null;
-    
-    const thread = await ctx.db.get(id);
-    if (!thread) return null;
-    
-    // Verify tenant access
-    const tenant = await ctx.db
-      .query("tenants")
-      .withIndex("by_orgId", (q) => q.eq("orgId", orgId))
-      .unique();
-    
-    if (!tenant || thread.tenantId !== tenant._id) return null;
-    
-    return thread;
+  handler: async (ctx, { id, orgId }) => {
+    return getWithTenantCheck(ctx, "threads", id, orgId);
   },
-})
+});
