@@ -21,6 +21,29 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "RootCopilot",
   description: "AI Debugging Assistant for Enterprises",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
+  openGraph: {
+    title: "RootCopilot",
+    description: "AI Debugging Assistant for Enterprises",
+    images: [
+      {
+        url: "/opengraph-image.jpg",
+        width: 1200,
+        height: 1200,
+        alt: "RootCopilot logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "RootCopilot",
+    description: "AI Debugging Assistant for Enterprises",
+    images: ["/twitter-image.jpg"],
+  },
 };
 
 export default function RootLayout({

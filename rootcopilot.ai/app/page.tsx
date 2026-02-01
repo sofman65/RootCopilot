@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useUser, useOrganization } from "@clerk/nextjs";
+import Brand from "@/components/shared/Brand";
 import {
   IconSparkles,
   IconBrain,
@@ -49,9 +50,7 @@ export default function LandingPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-neutral-950">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-            <IconSparkles className="w-6 h-6 text-white animate-pulse" />
-          </div>
+          <Brand size={48} />
           <p className="text-neutral-400">Loading your workspace...</p>
         </div>
       </div>
@@ -77,12 +76,12 @@ export default function LandingPage() {
       {/* Header */}
       <header className="relative z-10 border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <IconSparkles className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold tracking-tight">RootCopilot</span>
-          </div>
+          <Brand
+            href="/"
+            withText
+            size={44}
+            textClassName="text-xl font-bold tracking-tight"
+          />
 
           <nav className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm text-neutral-400 hover:text-white transition">

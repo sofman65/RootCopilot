@@ -1,7 +1,7 @@
 "use client";
 
 import { SignUp } from "@clerk/nextjs";
-import { IconSparkles } from "@tabler/icons-react";
+import Brand from "@/components/shared/Brand";
 
 export default function SignUpPage() {
   return (
@@ -24,9 +24,7 @@ export default function SignUpPage() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/15 rounded-full blur-[120px]" />
 
         <div className="relative z-10 max-w-md px-8 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-2xl shadow-purple-500/30 mb-8">
-            <IconSparkles className="w-8 h-8 text-white" />
-          </div>
+          <Brand size={64} className="mx-auto mb-8" />
 
           <h1 className="text-4xl font-bold text-white mb-4 tracking-tight">
             RootCopilot
@@ -57,9 +55,7 @@ export default function SignUpPage() {
         <div className="w-full max-w-md">
           {/* Mobile Header */}
           <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg mb-4">
-              <IconSparkles className="w-6 h-6 text-white" />
-            </div>
+            <Brand size={48} className="mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-white">
               RootCopilot
             </h1>
