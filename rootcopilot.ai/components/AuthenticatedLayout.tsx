@@ -4,15 +4,10 @@ import { usePathname } from "next/navigation";
 import { useUser, useOrganization } from "@clerk/nextjs";
 import AppSidebar from "@/components/AppSidebar";
 import RootContentWrapper from "@/components/RootContentWrapper";
+import { DEMO_MODE } from "@/lib/demo";
 
 // Routes that should NOT show the sidebar
-const PUBLIC_ROUTES = [
-  "/",
-  "/sign-in",
-  "/sign-up",
-  "/onboarding",
-  "/welcome",
-];
+const PUBLIC_ROUTES = ["/", "/sign-in", "/sign-up"];
 
 export default function AuthenticatedLayout({
   children,
@@ -32,15 +27,17 @@ export default function AuthenticatedLayout({
   // 1. Public routes (landing, sign-in, sign-up, onboarding)
   // 2. When user is not signed in
   // 3. When user has no organization selected
-  const showSidebar = userLoaded && orgLoaded && isSignedIn && organization && !isPublicRoute;
+  const showSidebar =
+    (!isPublicRoute && DEMO_MODE) ||
+    (userLoaded && orgLoaded && isSignedIn && organization && !isPublicRoute);
 
   if (!showSidebar) {
     // Full-page layout without sidebar - allow natural scrolling
     return (
-      <div className="min-h-screen w-full bg-neutral-950">
-        {children}
-      </div>
-    );
+    <div className="min-h-screen w-full bg-neutral-950">
+      {children}
+    </div>
+  );
   }
 
   // Authenticated layout with sidebar
@@ -53,4 +50,3 @@ export default function AuthenticatedLayout({
     </div>
   );
 }
-

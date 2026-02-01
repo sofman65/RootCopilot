@@ -98,8 +98,30 @@ export default function MarkdownRenderer({ children }: { children: string }) {
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeHighlight]}
         components={{
-          code: ({ inline, className, children, ...props }: React.ComponentPropsWithoutRef<'code'> & { inline?: boolean }) => {
-            return <CodeBlock inline={inline ?? false} className={className ?? ''} {...props}>{children}</CodeBlock>;
+          // Inline code only; block code handled by `pre`
+          code: ({ inline, className, children, ...props }: React.ComponentPropsWithoutRef<"code"> & { inline?: boolean }) => {
+            if (!inline) {
+              return <code className={className ?? ""} {...props}>{children}</code>;
+            }
+            return (
+              <code
+                className="rounded bg-neutral-200 dark:bg-neutral-800 px-1 py-0.5 text-sm"
+                {...props}
+              >
+                {children}
+              </code>
+            );
+          },
+
+          pre: ({ children }) => {
+            const codeElement = Array.isArray(children) ? children[0] : children;
+            const className = (codeElement as any)?.props?.className ?? "";
+            const codeChildren = (codeElement as any)?.props?.children ?? [];
+            return (
+              <CodeBlock inline={false} className={className}>
+                {codeChildren}
+              </CodeBlock>
+            );
           },
 
           h2({ children }) {

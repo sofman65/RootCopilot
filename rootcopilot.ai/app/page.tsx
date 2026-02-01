@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { useUser, useOrganization } from "@clerk/nextjs";
+import { DEMO_MODE } from "@/lib/demo";
 import Brand from "@/components/shared/Brand";
 import {
   IconSparkles,
@@ -22,8 +23,9 @@ export default function LandingPage() {
   const { isSignedIn, isLoaded: userLoaded } = useUser();
   const { organization, isLoaded: orgLoaded } = useOrganization();
 
-  // Redirect authenticated users with org to copilot
+  // Redirect authenticated users with org to copilot (skip in demo)
   useEffect(() => {
+    if (DEMO_MODE) return;
     if (userLoaded && isSignedIn) {
       if (orgLoaded && organization) {
         router.push("/copilot");
@@ -45,19 +47,7 @@ export default function LandingPage() {
     );
   }
 
-  // If signed in, show loading while redirecting
-  if (isSignedIn) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-950">
-        <div className="flex flex-col items-center gap-4">
-          <Brand size={48} />
-          <p className="text-neutral-400">Loading your workspace...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Landing page for unauthenticated users
+  // Landing page (demo-friendly)
   return (
     <div className="min-h-screen bg-neutral-950 text-white overflow-hidden">
       {/* Background Effects */}
@@ -83,30 +73,12 @@ export default function LandingPage() {
             textClassName="text-xl font-bold tracking-tight"
           />
 
-          <nav className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm text-neutral-400 hover:text-white transition">
-              Features
-            </a>
-            <a href="#how-it-works" className="text-sm text-neutral-400 hover:text-white transition">
-              How it Works
-            </a>
-            <a href="#security" className="text-sm text-neutral-400 hover:text-white transition">
-              Security
-            </a>
-          </nav>
-
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
-              href="/sign-in"
-              className="text-sm text-neutral-300 hover:text-white transition"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/sign-up"
+              href="/workspace"
               className="px-4 py-2 text-sm font-medium bg-white text-neutral-900 rounded-lg hover:bg-neutral-100 transition"
             >
-              Get Started
+              Start Demo
             </Link>
           </div>
         </div>
@@ -129,28 +101,20 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-xl text-neutral-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-            RootCopilot helps enterprise teams analyze logs, configs, and documentation 
-            to find root causes in minutes, not hours.
+            Watch a guided workspace with seeded incidents, AI explanations, and doc-aware answers. No setup, no sign‑in.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/sign-up"
+              href="/workspace"
               className="w-full sm:w-auto px-8 py-4 text-lg font-medium bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-xl shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2"
             >
-              Start Free Trial
+              Launch Demo
               <IconArrowRight className="w-5 h-5" />
             </Link>
-            <Link
-              href="/sign-in"
-              className="w-full sm:w-auto px-8 py-4 text-lg font-medium border border-neutral-700 hover:border-neutral-600 rounded-xl transition"
-            >
-              Sign In
-            </Link>
           </div>
-
           <p className="mt-6 text-sm text-neutral-500">
-            No credit card required • Setup in 2 minutes
+            Auto-created demo workspace • 3–5 live issues • AI thread per issue
           </p>
         </div>
 

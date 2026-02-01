@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useOrganization } from "@clerk/nextjs";
+import { DEMO_MODE, DEMO_ORG_ID, DEMO_ORG_NAME } from "@/lib/demo";
 
 interface UseOrgGuardOptions {
   /** Route to redirect to if no organization (default: "/onboarding") */
@@ -43,6 +44,18 @@ export function useOrgGuard(options: UseOrgGuardOptions = {}): UseOrgGuardReturn
   const router = useRouter();
   const { organization, isLoaded } = useOrganization();
 
+  // Demo mode: pretend we always have an org so UI can run auth-less
+  if (DEMO_MODE) {
+    return {
+      organization: {
+        id: DEMO_ORG_ID,
+        name: DEMO_ORG_NAME,
+      } as unknown as ReturnType<typeof useOrganization>["organization"],
+      isLoaded: true,
+      hasOrganization: true,
+    };
+  }
+
   useEffect(() => {
     if (isLoaded && !organization && shouldRedirect) {
       router.push(redirectTo);
@@ -57,4 +70,3 @@ export function useOrgGuard(options: UseOrgGuardOptions = {}): UseOrgGuardReturn
 }
 
 export default useOrgGuard;
-

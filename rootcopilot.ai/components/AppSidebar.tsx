@@ -4,15 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
 import { UserButton, OrganizationSwitcher, useOrganization } from "@clerk/nextjs";
-import {
-  IconSearch,
-  IconChartBar,
-  IconRobot,
-  IconBook2,
-  IconPlugConnected,
-  IconBuilding,
-  IconSettings,
-} from "@tabler/icons-react";
+import { IconSettings } from "@tabler/icons-react";
 
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { api } from "@/convex/_generated/api";
@@ -22,6 +14,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import SidebarHeader from "@/components/sidebar/SidebarHeader";
 import WorkspaceTree from "@/components/sidebar/WorkspaceTree";
 import ThemeToggle from "@/components/ThemeToggle";
+import { DEMO_MODE, DEMO_ORG_NAME, DEMO_ORG_ID } from "@/lib/demo";
 
 const STORAGE_KEY = "rcp.sidebar.expanded.v1";
 
@@ -35,6 +28,7 @@ export default function AppSidebar() {
   const router = useRouter();
   const { open } = useSidebar();
   const { organization } = useOrganization();
+  const orgId = DEMO_MODE ? DEMO_ORG_ID : organization?.id;
 
   const [expandedClients, setExpandedClients] = useState(new Set<Id<"clients">>());
   const [expandedProjects, setExpandedProjects] = useState(new Set<Id<"projects">>());
@@ -67,7 +61,7 @@ export default function AppSidebar() {
   // Pass orgId to the query so it can filter by tenant
   const clients = useQuery(
     api.clients.list, 
-    organization ? { orgId: organization.id } : "skip"
+    orgId ? { orgId } : "skip"
   );
 
   return (
@@ -78,29 +72,8 @@ export default function AppSidebar() {
         </div>
 
         {/* PRIMARY NAV */}
-        {open && <SectionLabel label="Tools" />}
+        {open && <SectionLabel label="Demo" />}
         <div className={cn("flex flex-col mt-2", open ? "gap-1" : "gap-0")}>
-          <SidebarLink
-            link={{
-              label: "Search Issues",
-              href: "/search",
-              icon: <IconSearch className="h-5 w-5" />
-            }}
-          />
-          <SidebarLink
-            link={{
-              label: "Insights",
-              href: "/insights",
-              icon: <IconChartBar className="h-5 w-5" />
-            }}
-          />
-          <SidebarLink
-            link={{
-              label: "Copilot",
-              href: "/copilot",
-              icon: <IconRobot className="h-5 w-5" />
-            }}
-          />
           <SidebarLink
             link={{
               label: "Workspace",
@@ -117,7 +90,7 @@ export default function AppSidebar() {
           {open && <SectionLabel label="Workspaces" className="px-3 mb-2" />}
           <WorkspaceTree
             clients={clients}
-            orgId={organization?.id}
+            orgId={orgId}
             expandedClients={expandedClients}
             setExpandedClients={setExpandedClients}
             expandedProjects={expandedProjects}
@@ -128,67 +101,52 @@ export default function AppSidebar() {
           />
         </div>
 
-        {/* SECONDARY NAV */}
-        {open && <div className="mt-4 border-t border-neutral-200 dark:border-neutral-700" />}
-        <div className={cn("pt-4 flex flex-col", open ? "gap-1" : "gap-0")}>
-          {open && <SectionLabel label="System" className="px-1 mb-2" />}
-          <SidebarLink
-            link={{
-              label: "Documentation",
-              href: "/docs",
-              icon: <IconBook2 className="h-5 w-5" />
-            }}
-          />
-          <SidebarLink
-            link={{
-              label: "Integrations",
-              href: "/integrations",
-              icon: <IconPlugConnected className="h-5 w-5" />
-            }}
-          />
-        </div>
-
         <div className={cn("mt-4 flex flex-col", open ? "gap-1" : "gap-0")}>
           {open && <SectionLabel label="Appearance" className="px-1 mb-1" />}
           <ThemeToggle />
         </div>
 
-        {/* ORGANIZATION SWITCHER */}
-        <div className={cn("border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
-          {open && <SectionLabel label="Organization" className="px-1 mb-2" />}
-          {open ? (
-            <OrganizationSwitcher
-              hidePersonal
-              afterCreateOrganizationUrl="/copilot"
-              afterSelectOrganizationUrl="/copilot"
-              appearance={{
-                elements: {
-                  rootBox: "w-full",
-                  organizationSwitcherTrigger:
-                    "w-full justify-start p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
-                }
-              }}
-            />
-          ) : (
-            <div className="flex justify-center p-2">
-              <IconBuilding className="h-5 w-5 text-neutral-500" />
+        {!DEMO_MODE && (
+          <>
+            <div className={cn("border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
+              {open && <SectionLabel label="Organization" className="px-1 mb-2" />}
+              {open ? (
+                <OrganizationSwitcher
+                  hidePersonal
+                  afterCreateOrganizationUrl="/copilot"
+                  afterSelectOrganizationUrl="/copilot"
+                  appearance={{
+                    elements: {
+                      rootBox: "w-full",
+                      organizationSwitcherTrigger:
+                        "w-full justify-start p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+                    }
+                  }}
+                />
+              ) : null}
             </div>
-          )}
-        </div>
 
-        {/* USER BUTTON AT BOTTOM */}
-        <div className={cn("border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
-          {open && <SectionLabel label="Profile" className="px-1 mb-1" />}
-          <UserButton
-            appearance={{
-              elements: {
-                userButtonBox: "w-full justify-start",
-                userButtonTrigger:
-                  "w-full justify-start p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              }
-            }}
-          />
-        </div>
+            <div className={cn("border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
+              {open && <SectionLabel label="Profile" className="px-1 mb-1" />}
+              <UserButton
+                appearance={{
+                  elements: {
+                    userButtonBox: "w-full justify-start",
+                    userButtonTrigger:
+                      "w-full justify-start p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  }
+                }}
+              />
+            </div>
+          </>
+        )}
+
+        {DEMO_MODE && (
+          <div className="border-t border-neutral-200 dark:border-neutral-700 p-3">
+            <p className="text-xs text-neutral-500">Demo org</p>
+            <p className="text-sm font-medium text-neutral-100">{DEMO_ORG_NAME}</p>
+          </div>
+        )}
       </SidebarBody>
     </Sidebar>
   );
