@@ -1,9 +1,8 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import * as React from "react";
 import { IconFolder } from "@tabler/icons-react";
-import type { Id } from "@/convex/_generated/dataModel";
+import { type EntityId, type Project, listProjects } from "@/lib/rootcopilot-api";
 
 import TreeRow from "./TreeRow";
 import EnvironmentList from "./EnvironmentList";
@@ -12,12 +11,12 @@ import { toggle } from "./toggle";
 import { useSidebar } from "@/components/ui/sidebar";
 
 type ProjectListProps = {
-  clientId: Id<"clients">;
-  expandedProjects: Set<Id<"projects">>;
-  setExpandedProjects: React.Dispatch<React.SetStateAction<Set<Id<"projects">>>>;
-  expandedEnvs: Set<Id<"environments">>;
-  setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<Id<"environments">>>>;
-  openIssue: (x: Id<"issues">) => void;
+  clientId: EntityId;
+  expandedProjects: Set<EntityId>;
+  setExpandedProjects: React.Dispatch<React.SetStateAction<Set<EntityId>>>;
+  expandedEnvs: Set<EntityId>;
+  setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<EntityId>>>;
+  openIssue: (x: EntityId) => void;
 };
 
 export default function ProjectList({
@@ -29,7 +28,25 @@ export default function ProjectList({
   openIssue
 }: ProjectListProps) {
   const { open } = useSidebar();
-  const projects = useQuery(api.projects.listByClient, { clientId });
+  const [projects, setProjects] = React.useState<Project[] | undefined>(undefined);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    listProjects(clientId)
+      .then((items) => {
+        if (!cancelled) setProjects(items);
+      })
+      .catch((error) => {
+        console.error("Failed to load projects:", error);
+        if (!cancelled) setProjects([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId]);
+
   if (projects === undefined) return <SkeletonList count={3} indent />;
 
   return (

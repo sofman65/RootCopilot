@@ -1,22 +1,39 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import * as React from "react";
 import { IconList } from "@tabler/icons-react";
-import type { Id } from "@/convex/_generated/dataModel";
+import { type EntityId, type Issue, listIssues } from "@/lib/rootcopilot-api";
 
 import { SidebarLink } from "@/components/ui/sidebar";
 import SkeletonList from "./SkeletonList";
 import { useSidebar } from "@/components/ui/sidebar";
 
 type IssueListProps = {
-  environmentId: Id<"environments">;
-  openIssue: (x: Id<"issues">) => void;
+  environmentId: EntityId;
+  openIssue: (x: EntityId) => void;
 };
 
 export default function IssueList({ environmentId, openIssue }: IssueListProps) {
   const { open } = useSidebar();
-  const issues = useQuery(api.issues.listByEnvironment, { environmentId });
+  const [issues, setIssues] = React.useState<Issue[] | undefined>(undefined);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    listIssues(environmentId)
+      .then((items) => {
+        if (!cancelled) setIssues(items);
+      })
+      .catch((error) => {
+        console.error("Failed to load issues:", error);
+        if (!cancelled) setIssues([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [environmentId]);
+
   if (issues === undefined) return <SkeletonList count={5} indent />;
 
   return (

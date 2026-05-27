@@ -2,9 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { IconSearch, IconMessages } from "@tabler/icons-react";
+import { type SearchResults, searchEverything } from "@/lib/rootcopilot-api";
 
 export default function SearchPage() {
   const [raw, setRaw] = React.useState("");
@@ -14,7 +13,36 @@ export default function SearchPage() {
     return () => clearTimeout(id);
   }, [raw]);
   const router = useRouter();
-  const results = useQuery(api.search.searchEverything, term.trim() ? { term } : "skip");
+  const [results, setResults] = React.useState<SearchResults | null>(null);
+  const [isSearching, setIsSearching] = React.useState(false);
+
+  React.useEffect(() => {
+    const q = term.trim();
+    if (!q) {
+      setResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearching(true);
+
+    searchEverything(q)
+      .then((data) => {
+        if (!cancelled) setResults(data);
+      })
+      .catch((error) => {
+        console.error("Search failed:", error);
+        if (!cancelled) setResults({ issues: [], messages: [] });
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [term]);
 
   const highlight = (text: string, q: string) => {
     if (!q.trim()) return text;
@@ -57,7 +85,7 @@ export default function SearchPage() {
             Issues
           </h2>
           <div className="space-y-2">
-            {!results && term.trim() && (
+            {isSearching && term.trim() && (
               <div className="text-sm text-neutral-500">Searching…</div>
             )}
             {results && results.issues.length === 0 && (
@@ -89,7 +117,7 @@ export default function SearchPage() {
             Messages
           </h2>
           <div className="space-y-2">
-            {!results && term.trim() && (
+            {isSearching && term.trim() && (
               <div className="text-sm text-neutral-500">Searching…</div>
             )}
             {results && results.messages.length === 0 && (

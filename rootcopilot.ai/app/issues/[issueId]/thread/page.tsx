@@ -1,9 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
 
 import { ChatBubble } from "@/components/ChatBubble";
 import { ChatBubbleSkeleton } from "@/components/ChatBubbleSkeleton";
@@ -12,6 +9,19 @@ import QuickActions from "@/components/QuickActions";
 import BottomFade from "@/components/BottomFade";
 import ScrollToBottomButton from "@/components/ScrollToBottomButton";
 import { groupMessages } from "@/lib/utils";
+import {
+  type Issue,
+  type Thread,
+  type ThreadMessage,
+  createThread,
+  getIssue,
+  getThreadByIssue,
+  listThreadMessages,
+  sendQuickActionUserMessage,
+  sendThreadMessage,
+  triggerAssistantQuickAction,
+  triggerAssistantReply,
+} from "@/lib/rootcopilot-api";
 
 export default function ThreadPage({ params }: { params: Promise<{ issueId: string }> }) {
   const { issueId } = React.use(params);
@@ -32,31 +42,45 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   const [headerHeight, setHeaderHeight] = React.useState(0);
   const [composerHeight, setComposerHeight] = React.useState(120);
 
-  const creatingRef = React.useRef(false);
+  const [issue, setIssue] = React.useState<Issue | null>(null);
+  const [thread, setThread] = React.useState<Thread | null>(null);
+  const [messages, setMessages] = React.useState<ThreadMessage[] | undefined>(undefined);
 
-  // --------------------------------------------
-  // CONVEX
-  // --------------------------------------------
-  const sendMessage = useMutation(api.thread_messages.sendMessage);
-  const sendQuickActionUserMessage = useMutation(
-    api.thread_messages.sendQuickActionUserMessage
-  );
-  const triggerReply = useAction(api.assistant.reply);
-  const triggerQuickAction = useAction(api.assistant.quickAction);
-  const createThread = useMutation(api.threads.create);
+  const refreshMessages = React.useCallback(async (threadId: string) => {
+    const nextMessages = await listThreadMessages(threadId);
+    setMessages(nextMessages);
+  }, []);
 
-  const thread = useQuery(api.threads.getByIssue, {
-    issueId: issueId as Id<"issues">,
-  });
+  React.useEffect(() => {
+    let cancelled = false;
 
-  const messages = useQuery(
-    api.thread_messages.getByThread,
-    thread ? { threadId: thread._id } : "skip"
-  );
+    async function loadThread() {
+      try {
+        const [nextIssue, existingThread] = await Promise.all([
+          getIssue(issueId),
+          getThreadByIssue(issueId).catch(() => createThread(issueId)),
+        ]);
 
-  const issue = useQuery(api.issues.get, {
-    id: issueId as Id<"issues">,
-  });
+        if (cancelled) return;
+        setIssue(nextIssue);
+        setThread(existingThread);
+        await refreshMessages(existingThread._id);
+      } catch (error) {
+        console.error("Failed to load issue thread:", error);
+        if (!cancelled) {
+          setIssue(null);
+          setThread(null);
+          setMessages([]);
+        }
+      }
+    }
+
+    loadThread();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [issueId, refreshMessages]);
 
   // --------------------------------------------
   // MEASURE HEADER HEIGHT
@@ -87,18 +111,6 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
 
     return () => ro.disconnect();
   }, []);
-
-  // --------------------------------------------
-  // CREATE THREAD IF MISSING
-  // --------------------------------------------
-  React.useEffect(() => {
-    if (thread === null && !creatingRef.current) {
-      creatingRef.current = true;
-      createThread({ issueId: issueId as Id<"issues"> }).finally(() => {
-        creatingRef.current = false;
-      });
-    }
-  }, [thread, issueId, createThread]);
 
   // --------------------------------------------
   // SCROLL HELPERS
@@ -201,14 +213,16 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     setIsSending(true);
     setIsAssistantReplying(true);
 
-    await sendMessage({
+    await sendThreadMessage({
       threadId: thread._id,
       content: input.trim(),
     });
 
     setInput("");
+    await refreshMessages(thread._id);
 
-    await triggerReply({ threadId: thread._id });
+    await triggerAssistantReply(thread._id);
+    await refreshMessages(thread._id);
 
     scrollToBottom("smooth");
     updateScrollButton();
@@ -230,12 +244,14 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
       threadId: thread._id,
       instruction,
     });
+    await refreshMessages(thread._id);
 
     // 2. Then trigger the assistant reply
-    await triggerQuickAction({
+    await triggerAssistantQuickAction({
       threadId: thread._id,
       instruction,
     });
+    await refreshMessages(thread._id);
 
     scrollToBottom("smooth");
     updateScrollButton();

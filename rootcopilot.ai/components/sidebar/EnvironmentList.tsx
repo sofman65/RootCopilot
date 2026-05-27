@@ -1,9 +1,8 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
+import * as React from "react";
 import { IconLayersSubtract } from "@tabler/icons-react";
-import type { Id } from "@/convex/_generated/dataModel";
+import { type EntityId, type Environment, listEnvironments } from "@/lib/rootcopilot-api";
 
 import TreeRow from "./TreeRow";
 import IssueList from "./IssueList";
@@ -12,10 +11,10 @@ import { toggle } from "./toggle";
 import { useSidebar } from "@/components/ui/sidebar";
 
 type EnvironmentListProps = {
-  projectId: Id<"projects">;
-  expandedEnvs: Set<Id<"environments">>;
-  setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<Id<"environments">>>>;
-  openIssue: (x: Id<"issues">) => void;
+  projectId: EntityId;
+  expandedEnvs: Set<EntityId>;
+  setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<EntityId>>>;
+  openIssue: (x: EntityId) => void;
 };
 
 export default function EnvironmentList({
@@ -25,7 +24,25 @@ export default function EnvironmentList({
   openIssue
 }: EnvironmentListProps) {
   const { open } = useSidebar();
-  const envs = useQuery(api.environments.listByProject, { projectId });
+  const [envs, setEnvs] = React.useState<Environment[] | undefined>(undefined);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    listEnvironments(projectId)
+      .then((items) => {
+        if (!cancelled) setEnvs(items);
+      })
+      .catch((error) => {
+        console.error("Failed to load environments:", error);
+        if (!cancelled) setEnvs([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   if (envs === undefined) return <SkeletonList count={4} indent />;
 
   return (

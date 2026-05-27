@@ -2,21 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
-import { UserButton } from "@clerk/nextjs";
 import {
   IconSearch,
   IconChartBar,
   IconRobot,
   IconBook2,
-  IconPlugConnected
+  IconPlugConnected,
+  IconUserCircle
 } from "@tabler/icons-react";
 
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
-import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
+import { type Client, type EntityId, listClients } from "@/lib/rootcopilot-api";
 
-import type { Id } from "@/convex/_generated/dataModel";
 import SidebarHeader from "@/components/sidebar/SidebarHeader";
 import WorkspaceTree from "@/components/sidebar/WorkspaceTree";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -24,18 +22,19 @@ import ThemeToggle from "@/components/ThemeToggle";
 const STORAGE_KEY = "rcp.sidebar.expanded.v1";
 
 type Persisted = {
-  clients: Id<"clients">[];
-  projects: Id<"projects">[];
-  envs: Id<"environments">[];
+  clients: EntityId[];
+  projects: EntityId[];
+  envs: EntityId[];
 };
 
 export default function AppSidebar() {
   const router = useRouter();
   const { open } = useSidebar();
 
-  const [expandedClients, setExpandedClients] = useState(new Set<Id<"clients">>());
-  const [expandedProjects, setExpandedProjects] = useState(new Set<Id<"projects">>());
-  const [expandedEnvs, setExpandedEnvs] = useState(new Set<Id<"environments">>());
+  const [clients, setClients] = useState<Client[] | undefined>(undefined);
+  const [expandedClients, setExpandedClients] = useState(new Set<EntityId>());
+  const [expandedProjects, setExpandedProjects] = useState(new Set<EntityId>());
+  const [expandedEnvs, setExpandedEnvs] = useState(new Set<EntityId>());
 
   // Restore saved expansion state
   useEffect(() => {
@@ -61,7 +60,22 @@ export default function AppSidebar() {
     } catch {}
   }, [expandedClients, expandedProjects, expandedEnvs]);
 
-  const clients = useQuery(api.clients.list);
+  useEffect(() => {
+    let cancelled = false;
+
+    listClients()
+      .then((items) => {
+        if (!cancelled) setClients(items);
+      })
+      .catch((error) => {
+        console.error("Failed to load clients:", error);
+        if (!cancelled) setClients([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <Sidebar>
@@ -142,13 +156,11 @@ export default function AppSidebar() {
         <div className={cn("mt-auto border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
           <div className="h-4" aria-hidden />
           {open && <SectionLabel label="Profile" className="px-1 mb-1" />}
-          <UserButton
-            appearance={{
-              elements: {
-                userButtonBox: "w-full justify-start",
-                userButtonTrigger:
-                  "w-full justify-start p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
-              }
+          <SidebarLink
+            link={{
+              label: "Local Session",
+              href: "/",
+              icon: <IconUserCircle className="h-5 w-5" />
             }}
           />
         </div>

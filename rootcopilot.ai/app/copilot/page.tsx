@@ -1,12 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { useAction } from "convex/react";
-import { api } from "@/convex/_generated/api";
 
 import { ChatBubble } from "@/components/ChatBubble";
 import TypingBubble from "@/components/TypingBubble";
 import { IconSparkles, IconUpload, IconInfoCircle, IconBook2, IconRefresh } from "@tabler/icons-react";
+import {
+  addRagDocument,
+  askRag,
+  listRagEntries,
+  type RagEntry,
+  type RagSource,
+} from "@/lib/rootcopilot-api";
 
 // ------------------------------
 // TYPES
@@ -19,13 +24,6 @@ interface LocalMessage {
   created_at: number;
 }
 
-interface RagEntry {
-  entryId: string;
-  title?: string;
-  namespace?: string;
-  createdAt?: number;
-}
-
 // ------------------------------
 // COMPONENT
 // ------------------------------
@@ -34,19 +32,10 @@ export default function CopilotPage() {
   const [input, setInput] = React.useState("");
   const [messages, setMessages] = React.useState<LocalMessage[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [sources, setSources] = React.useState<Array<{
-    chunk: string;
-    score: number;
-    doc: { name?: string; namespace: string } | null;
-  }>>([]);
+  const [sources, setSources] = React.useState<RagSource[]>([]);
 
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
-
-  // RAG ACTIONS
-  const addDoc = useAction(api.rag.addDocument);
-  const ask = useAction(api.rag.ask);
-  const listEntries = useAction(api.rag.listEntries);
 
   // INDEXED DOCS LIST (fetched via action)
   const [docs, setDocs] = React.useState<RagEntry[]>([]);
@@ -61,14 +50,14 @@ export default function CopilotPage() {
   const fetchDocs = React.useCallback(async () => {
     setLoadingDocs(true);
     try {
-      const entries = await listEntries({ namespace: namespace || undefined });
+      const entries = await listRagEntries(namespace || undefined);
       setDocs(entries);
     } catch (err) {
       console.error("Failed to fetch entries:", err);
     } finally {
       setLoadingDocs(false);
     }
-  }, [listEntries, namespace]);
+  }, [namespace]);
 
   React.useEffect(() => {
     fetchDocs();
@@ -108,7 +97,7 @@ export default function CopilotPage() {
     setSources([]);
 
     try {
-      const res = await ask({ question: q, namespace: namespace || undefined });
+      const res = await askRag({ question: q, namespace: namespace || undefined });
 
       setMessages((prev) => [
         ...prev,
@@ -128,7 +117,7 @@ export default function CopilotPage() {
         {
           id: `err-${Date.now()}`,
           role: "assistant",
-          content: "⚠️ Something went wrong. Try again.",
+          content: "Something went wrong. Try again.",
           created_at: Date.now(),
         },
       ]);
@@ -152,7 +141,7 @@ export default function CopilotPage() {
       const txt = await f.text();
       if (!txt.trim()) continue;
 
-      await addDoc({
+      await addRagDocument({
         name: f.name,
         text: txt,
         namespace: namespace || undefined,

@@ -1,24 +1,21 @@
 "use client";
 
-import { useSidebar } from "@/components/ui/sidebar";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import { IconFolders } from "@tabler/icons-react";
-import type { Id } from "@/convex/_generated/dataModel";
+import { type Client, type EntityId } from "@/lib/rootcopilot-api";
 
 import ProjectList from "./ProjectList";
 import TreeRow from "./TreeRow";
 import SkeletonList from "./SkeletonList";
 
 type WorkspaceTreeProps = {
-  clients: ReturnType<typeof useQuery<typeof api.clients.list>>;
-  expandedClients: Set<Id<"clients">>;
-  setExpandedClients: React.Dispatch<React.SetStateAction<Set<Id<"clients">>>>;
-  expandedProjects: Set<Id<"projects">>;
-  setExpandedProjects: React.Dispatch<React.SetStateAction<Set<Id<"projects">>>>;
-  expandedEnvs: Set<Id<"environments">>;
-  setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<Id<"environments">>>>;
-  openIssue: (x: Id<"issues">) => void;
+  clients: Client[] | undefined;
+  expandedClients: Set<EntityId>;
+  setExpandedClients: React.Dispatch<React.SetStateAction<Set<EntityId>>>;
+  expandedProjects: Set<EntityId>;
+  setExpandedProjects: React.Dispatch<React.SetStateAction<Set<EntityId>>>;
+  expandedEnvs: Set<EntityId>;
+  setExpandedEnvs: React.Dispatch<React.SetStateAction<Set<EntityId>>>;
+  openIssue: (x: EntityId) => void;
 };
 
 export default function WorkspaceTree({
@@ -31,8 +28,6 @@ export default function WorkspaceTree({
   setExpandedEnvs,
   openIssue
 }: WorkspaceTreeProps) {
-  const { open } = useSidebar();
-
   if (clients === undefined) return <SkeletonList count={5} />;
 
   return (

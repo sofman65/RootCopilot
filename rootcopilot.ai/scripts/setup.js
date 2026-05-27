@@ -13,7 +13,7 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-console.log('🚀 RootCopilot Template Setup\n');
+console.log('RootCopilot Setup\n');
 
 function question(prompt) {
   return new Promise((resolve) => {
@@ -37,37 +37,28 @@ async function setup() {
     fs.writeFileSync(packagePath, JSON.stringify(packageJson, null, 2));
     
     // Create .env.local template
-    const envTemplate = `# Clerk Authentication
-# Get these from https://clerk.com
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_your_publishable_key_here
-CLERK_SECRET_KEY=sk_test_your_secret_key_here
-
-# Convex Backend
-# Get this from https://convex.dev after running 'npx convex dev'
-NEXT_PUBLIC_CONVEX_URL=https://your-project-name.convex.cloud
-
-# Optional: Clerk Frontend API URL (usually auto-detected)
-# CLERK_FRONTEND_API_URL=https://clerk.your-domain.com
+    const envTemplate = `# FastAPI backend
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 `;
     
     const envPath = path.join(__dirname, '..', '.env.local');
     if (!fs.existsSync(envPath)) {
       fs.writeFileSync(envPath, envTemplate);
-      console.log('✅ Created .env.local template');
+      console.log('Created .env.local template');
     } else {
-      console.log('⚠️  .env.local already exists, skipping...');
+      console.log('.env.local already exists, skipping...');
     }
     
-    console.log('\n🎉 Setup complete!');
+    console.log('\nSetup complete!');
     console.log('\nNext steps:');
-    console.log('1. Edit .env.local with your actual API keys');
+    console.log('1. Edit .env.local with your FastAPI base URL');
     console.log('2. Run: npm install');
-    console.log('3. Run: npx convex dev (in one terminal)');
-    console.log('4. Run: npm run dev (in another terminal)');
-    console.log('\n📚 Check README.md for detailed instructions');
+    console.log('3. Start your FastAPI backend');
+    console.log('4. Run: npm run dev');
+    console.log('\nCheck README.md for detailed instructions');
     
   } catch (error) {
-    console.error('❌ Setup failed:', error.message);
+    console.error('Setup failed:', error.message);
   } finally {
     rl.close();
   }

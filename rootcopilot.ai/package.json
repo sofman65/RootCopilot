@@ -1,41 +1,37 @@
 {
-  "name": "rootcopilot-template",
+  "name": "rootcopilot-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A modern full-stack template with Next.js, Convex, and Clerk",
+  "description": "Frontend for RootCopilot, an AI root-cause intelligence platform for engineering tickets.",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "convex:dev": "convex dev",
-    "convex:deploy": "convex deploy",
-    "convex:codegen": "convex codegen",
-    "setup": "node scripts/setup.js"
+    "lint": "next lint"
   },
   "dependencies": {
     "@ai-sdk/openai": "2.0.75",
-    "@clerk/nextjs": "6.30.1",
-    "@convex-dev/rag": "0.6.1",
     "@tabler/icons-react": "3.34.1",
+    "@tanstack/react-query": "^5.62.0",
+    "axios": "^1.7.9",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "convex": "1.25.4",
     "highlight.js": "11.9.0",
     "lucide-react": "0.539.0",
     "motion": "12.23.12",
-    "next": "15.4.6",
+    "next": "16.2.6",
     "next-themes": "0.4.4",
     "pdf-parse": "1.1.1",
     "pdfjs-dist": "3.11.174",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
     "react-markdown": "10.1.0",
     "rehype-highlight": "7.0.2",
     "rehype-raw": "7.0.0",
     "remark-gfm": "4.0.1",
-    "tailwind-merge": "3.3.1"
+    "tailwind-merge": "3.3.1",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -51,13 +47,14 @@
   },
   "keywords": [
     "nextjs",
-    "convex",
-    "clerk",
     "typescript",
     "tailwind",
-    "template",
-    "fullstack"
+    "fastapi",
+    "root-cause-analysis",
+    "jira",
+    "azure-devops",
+    "ai-engineering"
   ],
-  "author": "Your Name",
+  "author": "Sofianos Lampropoulos",
   "license": "MIT"
 }
