@@ -8,18 +8,19 @@ import {
   IconRobot,
   IconBook2,
   IconPlugConnected,
-  IconUserCircle
+  IconUserCircle,
+  IconTicket,
 } from "@tabler/icons-react";
 
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import { type Client, type EntityId, listClients } from "@/lib/rootcopilot-api";
+import { type EntityId, type WorkspaceTreeResponse, getWorkspaceTree } from "@/lib/rootcopilot-api";
 
 import SidebarHeader from "@/components/sidebar/SidebarHeader";
 import WorkspaceTree from "@/components/sidebar/WorkspaceTree";
 import ThemeToggle from "@/components/ThemeToggle";
 
-const STORAGE_KEY = "rcp.sidebar.expanded.v1";
+const STORAGE_KEY = "rcp.sidebar.expanded.v2";
 
 type Persisted = {
   clients: EntityId[];
@@ -31,7 +32,7 @@ export default function AppSidebar() {
   const router = useRouter();
   const { open } = useSidebar();
 
-  const [clients, setClients] = useState<Client[] | undefined>(undefined);
+  const [tree, setTree] = useState<WorkspaceTreeResponse | undefined>(undefined);
   const [expandedClients, setExpandedClients] = useState(new Set<EntityId>());
   const [expandedProjects, setExpandedProjects] = useState(new Set<EntityId>());
   const [expandedEnvs, setExpandedEnvs] = useState(new Set<EntityId>());
@@ -53,23 +54,24 @@ export default function AppSidebar() {
     const p: Persisted = {
       clients: Array.from(expandedClients),
       projects: Array.from(expandedProjects),
-      envs: Array.from(expandedEnvs)
+      envs: Array.from(expandedEnvs),
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
     } catch {}
   }, [expandedClients, expandedProjects, expandedEnvs]);
 
+  // Single API call — replaces the 4 legacy calls
   useEffect(() => {
     let cancelled = false;
 
-    listClients()
-      .then((items) => {
-        if (!cancelled) setClients(items);
+    getWorkspaceTree()
+      .then((data) => {
+        if (!cancelled) setTree(data);
       })
       .catch((error) => {
-        console.error("Failed to load clients:", error);
-        if (!cancelled) setClients([]);
+        console.error("Failed to load workspace tree:", error);
+        if (!cancelled) setTree({ clients: [] });
       });
 
     return () => {
@@ -91,21 +93,28 @@ export default function AppSidebar() {
             link={{
               label: "Search Issues",
               href: "/search",
-              icon: <IconSearch className="h-5 w-5" />
+              icon: <IconSearch className="h-5 w-5" />,
+            }}
+          />
+          <SidebarLink
+            link={{
+              label: "Tickets",
+              href: "/tickets",
+              icon: <IconTicket className="h-5 w-5" />,
             }}
           />
           <SidebarLink
             link={{
               label: "Insights",
               href: "/insights",
-              icon: <IconChartBar className="h-5 w-5" />
+              icon: <IconChartBar className="h-5 w-5" />,
             }}
           />
           <SidebarLink
             link={{
               label: "Copilot",
               href: "/copilot",
-              icon: <IconRobot className="h-5 w-5" />
+              icon: <IconRobot className="h-5 w-5" />,
             }}
           />
         </div>
@@ -116,14 +125,14 @@ export default function AppSidebar() {
         <div className="flex-1 overflow-y-auto overflow-x-hidden mt-4 min-h-0">
           {open && <SectionLabel label="Workspaces" className="px-3 mb-2" />}
           <WorkspaceTree
-            clients={clients}
+            tree={tree}
             expandedClients={expandedClients}
             setExpandedClients={setExpandedClients}
             expandedProjects={expandedProjects}
             setExpandedProjects={setExpandedProjects}
             expandedEnvs={expandedEnvs}
             setExpandedEnvs={setExpandedEnvs}
-            openIssue={(id) => router.push(`/issues/${id}/thread`)}
+            openTicket={(id) => router.push(`/tickets/${id}`)}
           />
         </div>
 
@@ -135,14 +144,14 @@ export default function AppSidebar() {
             link={{
               label: "Documentation",
               href: "/docs",
-              icon: <IconBook2 className="h-5 w-5" />
+              icon: <IconBook2 className="h-5 w-5" />,
             }}
           />
           <SidebarLink
             link={{
               label: "Integrations",
               href: "/integrations",
-              icon: <IconPlugConnected className="h-5 w-5" />
+              icon: <IconPlugConnected className="h-5 w-5" />,
             }}
           />
         </div>
@@ -152,7 +161,6 @@ export default function AppSidebar() {
           <ThemeToggle />
         </div>
 
-        {/* USER BUTTON AT BOTTOM (REAL CHATGPT STYLE) */}
         <div className={cn("mt-auto border-t border-neutral-200 dark:border-neutral-700 p-2", open ? "pt-3" : "pt-2")}>
           <div className="h-4" aria-hidden />
           {open && <SectionLabel label="Profile" className="px-1 mb-1" />}
@@ -160,7 +168,7 @@ export default function AppSidebar() {
             link={{
               label: "Local Session",
               href: "/",
-              icon: <IconUserCircle className="h-5 w-5" />
+              icon: <IconUserCircle className="h-5 w-5" />,
             }}
           />
         </div>
@@ -171,9 +179,7 @@ export default function AppSidebar() {
 
 function SectionLabel({ label, className = "" }: { label: string; className?: string }) {
   return (
-    <div
-      className={`px-2 text-[10px] uppercase tracking-wide text-neutral-500 dark:text-neutral-400 ${className}`}
-    >
+    <div className={`px-2 text-[10px] uppercase tracking-wide text-neutral-500 dark:text-neutral-400 ${className}`}>
       {label}
     </div>
   );

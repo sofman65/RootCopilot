@@ -50,6 +50,132 @@ export type SearchResults = {
   }>;
 };
 
+// ---------------------------------------------------------------------------
+// Canonical workspace tree types (from GET /workspace/tree)
+// ---------------------------------------------------------------------------
+
+export type TicketSummary = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  source_system: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EnvironmentNode = {
+  id: string;
+  name: string;
+  tickets: TicketSummary[];
+};
+
+export type ProjectNode = {
+  id: string;
+  name: string;
+  environments: EnvironmentNode[];
+};
+
+export type ClientNode = {
+  id: string;
+  name: string;
+  projects: ProjectNode[];
+};
+
+export type WorkspaceTreeResponse = {
+  clients: ClientNode[];
+};
+
+export async function getWorkspaceTree(): Promise<WorkspaceTreeResponse> {
+  return request<WorkspaceTreeResponse>("/workspace/tree");
+}
+
+// ---------------------------------------------------------------------------
+// Canonical ticket and analysis types
+// ---------------------------------------------------------------------------
+
+export type Ticket = {
+  id: EntityId;
+  workspace_id: string;
+  project_id: string;
+  integration_id: string;
+  source_system: string;
+  external_id: string | null;
+  external_url: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  client_name: string | null;
+  environment: string | null;
+  component: string | null;
+  service_name: string | null;
+  labels: string[];
+  area_path: string | null;
+  assignee: string | null;
+  reporter: string | null;
+  source_created_at: string | null;
+  source_updated_at: string | null;
+  ingested_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SimilarTicketRef = {
+  ticket_id: string;
+  title: string;
+  score: number;
+  explanation: string;
+};
+
+export type AnalysisResultJson = {
+  summary: string;
+  likely_root_cause: string;
+  confidence: "low" | "medium" | "high";
+  evidence: string[];
+  suggested_steps: string[];
+  stakeholder_summary: string;
+};
+
+export type AnalysisRun = {
+  id: string;
+  ticket_id: string;
+  triggered_by: string;
+  instruction: string;
+  status: "pending" | "running" | "done" | "failed";
+  model: string;
+  result_markdown: string | null;
+  result_json: AnalysisResultJson | null;
+  similar_tickets: SimilarTicketRef[];
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
+export async function listTickets(): Promise<Ticket[]> {
+  return request<Ticket[]>("/tickets");
+}
+
+export async function getTicket(ticketId: EntityId): Promise<Ticket> {
+  return request<Ticket>(`/tickets/${ticketId}`);
+}
+
+export async function analyzeTicket(
+  ticketId: EntityId,
+  options?: { instruction?: string }
+): Promise<AnalysisRun> {
+  return request<AnalysisRun>(`/tickets/${ticketId}/analyze`, {
+    method: "POST",
+    body: JSON.stringify(options ?? {}),
+  });
+}
+
+export async function getTicketAnalysis(ticketId: EntityId): Promise<AnalysisRun> {
+  return request<AnalysisRun>(`/tickets/${ticketId}/analysis`);
+}
+
+// ---------------------------------------------------------------------------
+
 export type RagEntry = {
   entryId: string;
   title?: string;
