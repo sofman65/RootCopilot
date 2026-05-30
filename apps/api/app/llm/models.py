@@ -46,7 +46,7 @@ class LLMRequest(BaseModel):
 
     context: AnalysisContext
     instruction: str = Field(..., min_length=1, max_length=10000, description="Prompt instruction for the LLM")
-    model: str
+    model: str = ""  # the agent chooses based on config; service callers don't set this
     max_tokens: int = 1024
     temperature: float = 0.2
     triggered_by: str = "user"
