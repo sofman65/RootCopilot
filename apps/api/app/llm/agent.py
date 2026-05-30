@@ -29,10 +29,12 @@ SYSTEM_PROMPT = (
     "- summary: one-sentence restatement of the issue\n"
     "- likely_root_cause: most probable cause from context + similar tickets\n"
     "- confidence: 'high' | 'medium' | 'low'\n"
-    "- evidence: bullet points of supporting facts from the ticket data\n"
-    "- suggested_steps: ordered remediation steps\n"
+    "- evidence: array of strings — supporting facts from the ticket data\n"
+    "- suggested_steps: array of strings — ordered remediation steps\n"
     "- stakeholder_summary: one-sentence non-technical summary\n\n"
-    "Always reason from provided context. Never invent details."
+    "Always reason from provided context. Never invent details.\n\n"
+    "IMPORTANT: Respond ONLY with a valid JSON object. "
+    "No markdown fences, no explanation, no extra text — just the JSON."
 )
 
 
@@ -107,7 +109,7 @@ class AnalysisAgent:
             timeout=30,
             max_retries=0,
             api_key=settings.anthropic_api_key,
-        ).with_structured_output(AnalysisResultJson, include_raw=True)
+        )
 
         if settings.openai_api_key:
             self.fallback = ChatOpenAI(
@@ -116,7 +118,7 @@ class AnalysisAgent:
                 timeout=30,
                 max_retries=0,
                 api_key=settings.openai_api_key,
-            ).with_structured_output(AnalysisResultJson, include_raw=True)
+            )
             self.fallback_model_name = "gpt-4o-mini"
         else:
             self.fallback = None
@@ -129,9 +131,16 @@ class AnalysisAgent:
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=_build_user_prompt(context, instruction)),
         ]
-        out = llm.invoke(messages)
-        parsed: AnalysisResultJson = out["parsed"]
-        raw = out["raw"]
+        raw = llm.invoke(messages)
+        content = raw.content
+
+        # Strip markdown fences if the model wrapped the JSON anyway
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+
+        parsed = AnalysisResultJson.model_validate_json(content)
         usage = getattr(raw, "usage_metadata", None) or {}
         return {
             "parsed": parsed,

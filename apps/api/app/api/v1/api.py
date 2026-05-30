@@ -12,6 +12,7 @@ from app.api.v1.routers import (
     search,
     rag,
     legacy,
+    llm,
 )
 
 api_router = APIRouter()
@@ -27,3 +28,4 @@ api_router.include_router(analysis.router)
 api_router.include_router(search.router)
 api_router.include_router(rag.router)
 api_router.include_router(legacy.router)
+api_router.include_router(llm.router)

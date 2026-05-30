@@ -1,5 +1,27 @@
+"""
+Test fixtures.
+
+Forces USE_MOCK_LLM=true and a placeholder ANTHROPIC_API_KEY *before*
+any app imports, so the LLMSubsystem uses MockAnalysisAgent and tests
+never make network calls.
+"""
+
+import os
+
+os.environ.setdefault("USE_MOCK_LLM", "true")
+os.environ.setdefault("ANTHROPIC_API_KEY", "test-placeholder")
+os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
+
 import pytest
 from fastapi.testclient import TestClient
+
+# Drop the cached Settings so the env vars above take effect
+from app.llm.config import get_settings
+get_settings.cache_clear()
+
+from app.llm.subsystem import reset_subsystem
+reset_subsystem()
+
 from app.main import app
 
 
