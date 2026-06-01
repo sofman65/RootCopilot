@@ -27,10 +27,12 @@ dev = [
     "pytest>=8.0",
     "httpx>=0.27",
     "mypy>=1.19.1",
+    "pytest-asyncio>=1.2.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
