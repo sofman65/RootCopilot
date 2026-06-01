@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Default False (production); test conftest forces True.
     use_mock_llm: bool = False
 
+    # Postgres connection (async). Optional so tests without DB still work.
+    # Format: postgresql+asyncpg://user:password@host:5432/dbname
+    database_url: Optional[str] = None
+
     model_config = {"env_file": str(_ENV_FILE), "extra": "ignore"}
 
     @property
