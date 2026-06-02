@@ -1,23 +1,26 @@
 """
-Analysis domain service.
+Analysis domain service — DB-backed.
 
 Bridges the analysis router and the LLM subsystem:
-- Looks up the ticket
-- Computes similar tickets (cheap deterministic heuristic)
-- Builds AnalysisContext and LLMRequest
-- Calls the LLM subsystem
-- Persists the AnalysisRun in ANALYSIS_RUNS
+- Looks up the ticket via TicketRepository
+- Computes similar tickets via the same heuristic
+- Builds AnalysisContext + LLMRequest
+- Calls the LLM subsystem (mock or real)
+- Persists the AnalysisRun via AnalysisRunRepository
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.demo_data import TICKETS, ANALYSIS_RUNS
-from app.llm.subsystem import get_subsystem
 from app.llm.models import AnalysisContext, LLMRequest
+from app.llm.subsystem import get_subsystem
+from app.models import AnalysisRun, Ticket
+from app.repositories import AnalysisRunRepository, TicketRepository
 from app.schemas.analysis import SimilarTicketRef
-from app.utils import _now, _new_id
 
 
 DEFAULT_INSTRUCTION = (
@@ -26,32 +29,30 @@ DEFAULT_INSTRUCTION = (
 )
 
 
-def _find_similar_tickets(target: dict, max_results: int = 3) -> List[SimilarTicketRef]:
-    """Heuristic: same-project tickets, ranked by priority match."""
+def _to_similar_refs(target: Ticket, similar: List[Ticket]) -> List[SimilarTicketRef]:
     return [
         SimilarTicketRef(
-            ticket_id=t["id"],
-            title=t["title"],
-            score=round(0.75 + 0.1 * (t["priority"] == target["priority"]), 2),
+            ticket_id=str(t.id),
+            title=t.title,
+            score=round(0.75 + 0.1 * (t.priority == target.priority), 2),
             explanation="Similar component and environment configuration.",
         )
-        for t in TICKETS
-        if t["id"] != target["id"] and t["project_id"] == target["project_id"]
-    ][:max_results]
+        for t in similar
+    ]
 
 
-def _build_context(ticket: dict, similar: List[SimilarTicketRef]) -> AnalysisContext:
+def _build_context(ticket: Ticket, similar: List[SimilarTicketRef]) -> AnalysisContext:
     return AnalysisContext(
-        ticket_id=ticket["id"],
-        title=ticket["title"],
-        description=ticket.get("description"),
-        status=ticket["status"],
-        priority=ticket["priority"],
-        environment=ticket.get("environment"),
-        component=ticket.get("component"),
-        service_name=ticket.get("service_name"),
-        client_name=ticket.get("client_name"),
-        labels=ticket.get("labels", []),
+        ticket_id=str(ticket.id),
+        title=ticket.title,
+        description=ticket.description,
+        status=ticket.status,
+        priority=ticket.priority,
+        environment=ticket.environment,
+        component=ticket.component,
+        service_name=ticket.service_name,
+        client_name=ticket.client_name,
+        labels=list(ticket.labels or []),
         similar_tickets=similar,
     )
 
@@ -65,19 +66,22 @@ def _render_markdown(result_json) -> str:
     )
 
 
-def analyze_ticket(
-    ticket_id: str,
+async def analyze_ticket(
+    session: AsyncSession,
+    ticket_id: UUID,
     instruction: Optional[str] = None,
     triggered_by: str = "user",
-) -> dict:
-    """Run analysis and persist an AnalysisRun. Returns the AnalysisRun dict."""
-    ticket = next((t for t in TICKETS if t["id"] == ticket_id), None)
-    if not ticket:
+) -> AnalysisRun:
+    """Run analysis, persist as AnalysisRun, return the ORM object."""
+    ticket_repo = TicketRepository(session)
+    ticket = await ticket_repo.get_by_id(ticket_id)
+    if ticket is None:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     final_instruction = instruction or DEFAULT_INSTRUCTION
-    similar = _find_similar_tickets(ticket)
-    context = _build_context(ticket, similar)
+    similar_tickets = await ticket_repo.find_similar(ticket, limit=3)
+    similar_refs = _to_similar_refs(ticket, similar_tickets)
+    context = _build_context(ticket, similar_refs)
 
     request = LLMRequest(
         context=context,
@@ -86,22 +90,22 @@ def analyze_ticket(
     )
 
     subsystem = get_subsystem()
-    response = subsystem.analyze(request, ticket_updated_at=ticket.get("updated_at"))
+    ticket_updated_at = ticket.updated_at.isoformat() if ticket.updated_at else None
+    response = subsystem.analyze(request, ticket_updated_at=ticket_updated_at)
 
-    now = _now()
-    run = {
-        "id": _new_id("analysis_"),
-        "ticket_id": ticket_id,
-        "triggered_by": triggered_by,
-        "instruction": final_instruction,
-        "status": "done",
-        "model": response.usage.model,
-        "result_markdown": _render_markdown(response.result_json) if response.result_json else None,
-        "result_json": response.result_json.model_dump() if response.result_json else None,
-        "similar_tickets": [s.model_dump() for s in similar],
-        "created_at": now,
-        "updated_at": now,
-        "completed_at": now,
-    }
-    ANALYSIS_RUNS.append(run)
+    now = datetime.now(timezone.utc)
+    run = await AnalysisRunRepository(session).create(
+        ticket_id=ticket.id,
+        triggered_by=triggered_by,
+        instruction=final_instruction,
+        status="done",
+        model=response.usage.model,
+        result_markdown=_render_markdown(response.result_json) if response.result_json else None,
+        result_json=response.result_json.model_dump() if response.result_json else None,
+        similar_tickets=[s.model_dump() for s in similar_refs],
+        input_tokens=response.usage.input_tokens,
+        output_tokens=response.usage.output_tokens,
+        latency_ms=response.usage.latency_ms,
+        completed_at=now,
+    )
     return run

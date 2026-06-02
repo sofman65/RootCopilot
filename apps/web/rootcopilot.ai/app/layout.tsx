@@ -18,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
+      <body className="antialiased" suppressHydrationWarning>
         <ThemeProviders>
           <SidebarProvider>
             <div className="h-full w-full flex bg-white dark:bg-neutral-900 overflow-hidden">

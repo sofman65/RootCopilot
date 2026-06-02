@@ -215,59 +215,88 @@ class TestLLMSubsystemSecurity:
 # analysis_service.analyze_ticket() — domain layer
 # ===========================================================================
 
+@pytest.fixture
+async def session():
+    """Per-test session backed by a fresh engine (same pattern as test_repositories)."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from app.llm.config import get_settings
+    settings = get_settings()
+    if not settings.database_url:
+        pytest.skip("DATABASE_URL not set")
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as s:
+            yield s
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture
+def demo_ticket_uuid():
+    from app.scripts.seed_demo_data import uuid_for
+    return uuid_for("ticket_merchant_config")
+
+
+NONEXISTENT_UUID = "00000000-0000-0000-0000-000000000000"
+
+
 class TestAnalysisService:
     def setup_method(self):
         reset_subsystem()
 
-    def test_returns_analysis_run_dict(self):
+    async def test_returns_analysis_run_orm(self, session, demo_ticket_uuid):
+        from app.models import AnalysisRun
         from app.services.analysis_service import analyze_ticket
-        result = analyze_ticket("ticket_merchant_config")
-        assert isinstance(result, dict)
+        result = await analyze_ticket(session, demo_ticket_uuid)
+        assert isinstance(result, AnalysisRun)
 
-    def test_model_is_mock_model(self):
+    async def test_model_is_mock_model(self, session, demo_ticket_uuid):
         from app.services.analysis_service import analyze_ticket
-        result = analyze_ticket("ticket_merchant_config")
-        assert result["model"] == "mock-model"
+        result = await analyze_ticket(session, demo_ticket_uuid)
+        assert result.model == "mock-model"
 
-    def test_status_is_done(self):
+    async def test_status_is_done(self, session, demo_ticket_uuid):
         from app.services.analysis_service import analyze_ticket
-        result = analyze_ticket("ticket_merchant_config")
-        assert result["status"] == "done"
+        result = await analyze_ticket(session, demo_ticket_uuid)
+        assert result.status == "done"
 
-    def test_result_json_all_fields(self):
+    async def test_result_json_all_fields(self, session, demo_ticket_uuid):
         from app.services.analysis_service import analyze_ticket
-        rj = analyze_ticket("ticket_merchant_config")["result_json"]
+        result = await analyze_ticket(session, demo_ticket_uuid)
+        rj = result.result_json
         for field in ("summary", "likely_root_cause", "confidence",
                       "evidence", "suggested_steps", "stakeholder_summary"):
             assert field in rj, f"Missing field: {field}"
 
-    def test_result_markdown_generated(self):
+    async def test_result_markdown_generated(self, session, demo_ticket_uuid):
         from app.services.analysis_service import analyze_ticket
-        result = analyze_ticket("ticket_merchant_config")
-        assert result["result_markdown"]
-        assert "### Summary" in result["result_markdown"]
+        result = await analyze_ticket(session, demo_ticket_uuid)
+        assert result.result_markdown
+        assert "### Summary" in result.result_markdown
 
-    def test_similar_tickets_populated(self):
+    async def test_similar_tickets_populated(self, session, demo_ticket_uuid):
         from app.services.analysis_service import analyze_ticket
-        result = analyze_ticket("ticket_merchant_config")
-        assert isinstance(result["similar_tickets"], list)
+        result = await analyze_ticket(session, demo_ticket_uuid)
+        assert isinstance(result.similar_tickets, list)
 
-    def test_nonexistent_ticket_raises_404(self):
+    async def test_nonexistent_ticket_raises_404(self, session):
+        from uuid import UUID
         from app.services.analysis_service import analyze_ticket
         from fastapi import HTTPException
         with pytest.raises(HTTPException) as exc_info:
-            analyze_ticket("nonexistent_ticket")
+            await analyze_ticket(session, UUID(NONEXISTENT_UUID))
         assert exc_info.value.status_code == 404
 
-    def test_custom_instruction_stored(self):
+    async def test_custom_instruction_stored(self, session, demo_ticket_uuid):
         from app.services.analysis_service import analyze_ticket
-        result = analyze_ticket("ticket_merchant_config", instruction="Custom instruction.")
-        assert result["instruction"] == "Custom instruction."
+        result = await analyze_ticket(session, demo_ticket_uuid, instruction="Custom instruction.")
+        assert result.instruction == "Custom instruction."
 
-    def test_triggered_by_stored(self):
+    async def test_triggered_by_stored(self, session, demo_ticket_uuid):
         from app.services.analysis_service import analyze_ticket
-        result = analyze_ticket("ticket_merchant_config", triggered_by="quick_action")
-        assert result["triggered_by"] == "quick_action"
+        result = await analyze_ticket(session, demo_ticket_uuid, triggered_by="quick_action")
+        assert result.triggered_by == "quick_action"
 
 
 # ===========================================================================
@@ -275,11 +304,14 @@ class TestAnalysisService:
 # ===========================================================================
 
 @pytest.fixture(scope="module")
-def llm_client():
+def llm_client(client):
+    """
+    Reuse the session-scoped TestClient from conftest. Opening a second
+    TestClient against the same `app` corrupts the cached DB engine
+    (two event loops). We just reset the subsystem so metrics are fresh.
+    """
     reset_subsystem()
-    from app.main import app
-    with TestClient(app) as c:
-        yield c
+    return client
 
 
 class TestLLMHealthEndpoint:
@@ -315,18 +347,20 @@ class TestLLMMetricsEndpoint:
             assert key in m
 
     def test_metrics_increment_after_analyze(self, llm_client):
+        from tests._demo_uuids import TICKET_MERCHANT_CONFIG
         before = llm_client.get("/llm/metrics").json()["total_requests"]
         llm_client.post(
-            "/tickets/ticket_merchant_config/analyze",
+            f"/tickets/{TICKET_MERCHANT_CONFIG}/analyze",
             json={"instruction": "pipeline metrics test"},
         )
         after = llm_client.get("/llm/metrics").json()["total_requests"]
         assert after == before + 1
 
     def test_cache_hit_rate_after_two_identical_calls(self, llm_client):
+        from tests._demo_uuids import TICKET_MERCHANT_CONFIG
         instruction = "cache hit rate validation test"
-        llm_client.post("/tickets/ticket_merchant_config/analyze", json={"instruction": instruction})
-        llm_client.post("/tickets/ticket_merchant_config/analyze", json={"instruction": instruction})
+        llm_client.post(f"/tickets/{TICKET_MERCHANT_CONFIG}/analyze", json={"instruction": instruction})
+        llm_client.post(f"/tickets/{TICKET_MERCHANT_CONFIG}/analyze", json={"instruction": instruction})
         stats = llm_client.get("/llm/cache/stats").json()
         assert stats["hits"] >= 1
 

@@ -1,35 +1,56 @@
-from fastapi import APIRouter, HTTPException
+"""Ticket comments — DB-backed."""
 
-from app.demo_data import TICKETS, COMMENTS
-from app.utils import _now, _new_id
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_session
+from app.repositories import TicketCommentRepository, TicketRepository
 
 router = APIRouter()
 
 
+def _comment_to_dict(c) -> dict:
+    return {
+        "id": str(c.id),
+        "ticket_id": str(c.ticket_id),
+        "source": c.source,
+        "external_id": c.external_id,
+        "author": c.author,
+        "body": c.body,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+    }
+
+
 @router.get("/tickets/{ticket_id}/comments")
-def list_comments(ticket_id: str):
-    if not any(t["id"] == ticket_id for t in TICKETS):
+async def list_comments(
+    ticket_id: UUID,
+    session: AsyncSession = Depends(get_session),
+):
+    if not await TicketRepository(session).get_by_id(ticket_id):
         raise HTTPException(status_code=404, detail="Ticket not found")
-    return [c for c in COMMENTS if c["ticket_id"] == ticket_id]
+    comments = await TicketCommentRepository(session).list_by_ticket(ticket_id)
+    return [_comment_to_dict(c) for c in comments]
 
 
 @router.post("/tickets/{ticket_id}/comments", status_code=201)
-def create_comment(ticket_id: str, body: dict):
-    if not any(t["id"] == ticket_id for t in TICKETS):
+async def create_comment(
+    ticket_id: UUID,
+    body: dict,
+    session: AsyncSession = Depends(get_session),
+):
+    if not await TicketRepository(session).get_by_id(ticket_id):
         raise HTTPException(status_code=404, detail="Ticket not found")
-    text = body.get("body", "").strip()
+    text = (body.get("body") or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="body is required")
-    now = _now()
-    comment = {
-        "id": _new_id("comment_"),
-        "ticket_id": ticket_id,
-        "source": "internal",
-        "external_id": None,
-        "author": body.get("author", "user"),
-        "body": text,
-        "created_at": now,
-        "updated_at": now,
-    }
-    COMMENTS.append(comment)
-    return comment
+
+    comment = await TicketCommentRepository(session).create(
+        ticket_id=ticket_id,
+        author=body.get("author", "user"),
+        body=text,
+        source="internal",
+    )
+    return _comment_to_dict(comment)

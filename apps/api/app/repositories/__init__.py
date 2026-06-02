@@ -11,6 +11,7 @@ from app.repositories.integration_repository import IntegrationRepository
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.ticket_repository import TicketRepository
 from app.repositories.ticket_comment_repository import TicketCommentRepository
+from app.repositories.ticket_artifact_repository import TicketArtifactRepository
 from app.repositories.analysis_run_repository import AnalysisRunRepository
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "ProjectRepository",
     "TicketRepository",
     "TicketCommentRepository",
+    "TicketArtifactRepository",
     "AnalysisRunRepository",
 ]

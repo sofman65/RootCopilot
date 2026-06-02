@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   IconSearch,
@@ -10,6 +10,8 @@ import {
   IconPlugConnected,
   IconUserCircle,
   IconTicket,
+  IconRefresh,
+  IconWifiOff,
 } from "@tabler/icons-react";
 
 import { Sidebar, SidebarBody, SidebarLink, useSidebar } from "@/components/ui/sidebar";
@@ -33,9 +35,17 @@ export default function AppSidebar() {
   const { open } = useSidebar();
 
   const [tree, setTree] = useState<WorkspaceTreeResponse | undefined>(undefined);
+  const [fetchError, setFetchError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [expandedClients, setExpandedClients] = useState(new Set<EntityId>());
   const [expandedProjects, setExpandedProjects] = useState(new Set<EntityId>());
   const [expandedEnvs, setExpandedEnvs] = useState(new Set<EntityId>());
+
+  const retry = useCallback(() => {
+    setTree(undefined);
+    setFetchError(false);
+    setRetryKey((k) => k + 1);
+  }, []);
 
   // Restore saved expansion state
   useEffect(() => {
@@ -61,23 +71,28 @@ export default function AppSidebar() {
     } catch {}
   }, [expandedClients, expandedProjects, expandedEnvs]);
 
-  // Single API call — replaces the 4 legacy calls
+  // Load workspace tree — retryKey forces a fresh fetch on retry
   useEffect(() => {
     let cancelled = false;
 
     getWorkspaceTree()
       .then((data) => {
-        if (!cancelled) setTree(data);
+        if (!cancelled) {
+          setTree(data);
+          setFetchError(false);
+        }
       })
-      .catch((error) => {
-        console.error("Failed to load workspace tree:", error);
-        if (!cancelled) setTree({ clients: [] });
+      .catch(() => {
+        if (!cancelled) {
+          setTree({ clients: [] });
+          setFetchError(true);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [retryKey]);
 
   return (
     <Sidebar>
@@ -124,16 +139,20 @@ export default function AppSidebar() {
         {/* SCROLLABLE WORKSPACE NAV */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden mt-4 min-h-0">
           {open && <SectionLabel label="Workspaces" className="px-3 mb-2" />}
-          <WorkspaceTree
-            tree={tree}
-            expandedClients={expandedClients}
-            setExpandedClients={setExpandedClients}
-            expandedProjects={expandedProjects}
-            setExpandedProjects={setExpandedProjects}
-            expandedEnvs={expandedEnvs}
-            setExpandedEnvs={setExpandedEnvs}
-            openTicket={(id) => router.push(`/tickets/${id}`)}
-          />
+          {fetchError ? (
+            <WorkspaceFetchError open={open} onRetry={retry} />
+          ) : (
+            <WorkspaceTree
+              tree={tree}
+              expandedClients={expandedClients}
+              setExpandedClients={setExpandedClients}
+              expandedProjects={expandedProjects}
+              setExpandedProjects={setExpandedProjects}
+              expandedEnvs={expandedEnvs}
+              setExpandedEnvs={setExpandedEnvs}
+              openTicket={(id) => router.push(`/tickets/${id}`)}
+            />
+          )}
         </div>
 
         {/* SECONDARY NAV */}
@@ -181,6 +200,38 @@ function SectionLabel({ label, className = "" }: { label: string; className?: st
   return (
     <div className={`px-2 text-[10px] uppercase tracking-wide text-neutral-500 dark:text-neutral-400 ${className}`}>
       {label}
+    </div>
+  );
+}
+
+function WorkspaceFetchError({ open, onRetry }: { open: boolean; onRetry: () => void }) {
+  if (!open) {
+    return (
+      <button
+        onClick={onRetry}
+        title="Workspace unreachable — click to retry"
+        className="flex items-center justify-center w-full py-2 text-amber-600 dark:text-amber-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition"
+      >
+        <IconWifiOff className="h-5 w-5" />
+      </button>
+    );
+  }
+  return (
+    <div className="mx-2 rounded-md border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-xs">
+      <div className="flex items-center gap-1.5 font-medium text-amber-800 dark:text-amber-300">
+        <IconWifiOff className="h-3.5 w-3.5" />
+        API unreachable
+      </div>
+      <p className="mt-1 text-amber-700/80 dark:text-amber-300/80 leading-snug">
+        The backend at port 8000 is not responding. Start the API and retry.
+      </p>
+      <button
+        onClick={onRetry}
+        className="mt-2 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-200 transition"
+      >
+        <IconRefresh className="h-3 w-3" />
+        Retry
+      </button>
     </div>
   );
 }

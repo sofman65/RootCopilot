@@ -16,8 +16,8 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.db import get_session_factory
 from app.demo_data import (
     WORKSPACE,
     INTEGRATIONS,
@@ -25,6 +25,7 @@ from app.demo_data import (
     TICKETS,
     COMMENTS,
 )
+from app.llm.config import get_settings
 from app.models import (
     Workspace,
     Integration,
@@ -50,118 +51,137 @@ def _parse_iso(s: Optional[str]) -> Optional[datetime]:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-async def seed():
-    factory = get_session_factory()
-    async with factory() as session:
-        ws_id = uuid_for(WORKSPACE["id"])
+async def _seed_into(session) -> uuid.UUID:
+    """Run the seed logic inside an existing async session. Returns workspace_id."""
+    ws_id = uuid_for(WORKSPACE["id"])
 
-        # ---- Workspace ---------------------------------------------------
-        ws = await session.get(Workspace, ws_id)
-        if ws is None:
-            ws = Workspace(id=ws_id, name=WORKSPACE["name"])
-            session.add(ws)
+    # ---- Workspace -------------------------------------------------------
+    ws = await session.get(Workspace, ws_id)
+    if ws is None:
+        session.add(Workspace(id=ws_id, name=WORKSPACE["name"]))
+    else:
+        ws.name = WORKSPACE["name"]
+
+    # ---- Integrations ----------------------------------------------------
+    for intg in INTEGRATIONS:
+        iid = uuid_for(intg["id"])
+        obj = await session.get(Integration, iid)
+        fields = dict(
+            workspace_id=ws_id,
+            type=intg["type"],
+            name=intg["name"],
+            config=intg.get("config", {}),
+            status=intg.get("status", "active"),
+            last_synced_at=_parse_iso(intg.get("last_synced_at")),
+        )
+        if obj is None:
+            session.add(Integration(id=iid, **fields))
         else:
-            ws.name = WORKSPACE["name"]
+            for k, v in fields.items():
+                setattr(obj, k, v)
 
-        # ---- Integrations ------------------------------------------------
-        for intg in INTEGRATIONS:
-            iid = uuid_for(intg["id"])
-            obj = await session.get(Integration, iid)
-            fields = dict(
-                workspace_id=ws_id,
-                type=intg["type"],
-                name=intg["name"],
-                config=intg.get("config", {}),
-                status=intg.get("status", "active"),
-                last_synced_at=_parse_iso(intg.get("last_synced_at")),
-            )
-            if obj is None:
-                session.add(Integration(id=iid, **fields))
-            else:
-                for k, v in fields.items():
-                    setattr(obj, k, v)
+    # ---- Projects --------------------------------------------------------
+    for p in PROJECTS:
+        pid = uuid_for(p["id"])
+        obj = await session.get(Project, pid)
+        fields = dict(
+            workspace_id=ws_id,
+            integration_id=uuid_for(p["integration_id"]),
+            external_id=p.get("external_id"),
+            name=p["name"],
+        )
+        if obj is None:
+            session.add(Project(id=pid, **fields))
+        else:
+            for k, v in fields.items():
+                setattr(obj, k, v)
 
-        # ---- Projects ----------------------------------------------------
-        for p in PROJECTS:
-            pid = uuid_for(p["id"])
-            obj = await session.get(Project, pid)
-            fields = dict(
-                workspace_id=ws_id,
-                integration_id=uuid_for(p["integration_id"]),
-                external_id=p.get("external_id"),
-                name=p["name"],
-            )
-            if obj is None:
-                session.add(Project(id=pid, **fields))
-            else:
-                for k, v in fields.items():
-                    setattr(obj, k, v)
-
-        # ---- Tickets -----------------------------------------------------
-        for t in TICKETS:
-            tid = uuid_for(t["id"])
-            obj = await session.get(Ticket, tid)
-            fields = dict(
-                workspace_id=ws_id,
-                project_id=uuid_for(t["project_id"]),
-                integration_id=uuid_for(t["integration_id"]) if t.get("integration_id") else None,
-                source_system=t["source_system"],
-                external_id=t.get("external_id"),
-                external_url=t.get("external_url"),
-                source_created_at=_parse_iso(t.get("source_created_at")),
-                source_updated_at=_parse_iso(t.get("source_updated_at")),
-                ingested_at=_parse_iso(t["ingested_at"]) or datetime.utcnow(),
-                title=t["title"],
-                description=t.get("description"),
-                status=t["status"],
-                priority=t["priority"],
-                client_name=t.get("client_name"),
-                environment=t.get("environment"),
-                component=t.get("component"),
-                service_name=t.get("service_name"),
-                area_path=t.get("area_path"),
-                labels=list(t.get("labels", [])),
-                assignee=t.get("assignee"),
-                reporter=t.get("reporter"),
-            )
-            if obj is None:
-                session.add(Ticket(id=tid, **fields))
-            else:
-                for k, v in fields.items():
-                    setattr(obj, k, v)
-
-        # ---- Comments ----------------------------------------------------
-        # Wipe + reinsert comments rather than upsert — easier and matches
-        # how the source-system sync will work later (replace by ticket).
-        for t in TICKETS:
-            tid = uuid_for(t["id"])
-            await session.execute(
-                delete(TicketComment).where(TicketComment.ticket_id == tid)
-            )
-
-        for c in COMMENTS:
-            session.add(TicketComment(
-                id=uuid_for(c["id"]),
-                ticket_id=uuid_for(c["ticket_id"]),
-                source=c.get("source", "internal"),
-                external_id=c.get("external_id"),
-                author=c["author"],
-                body=c["body"],
-            ))
-
-        await session.commit()
-
-    print(
-        f"Seeded: 1 workspace, "
-        f"{len(INTEGRATIONS)} integrations, "
-        f"{len(PROJECTS)} projects, "
-        f"{len(TICKETS)} tickets, "
-        f"{len(COMMENTS)} comments"
-    )
-    print(f"Workspace UUID: {ws_id}")
-    print(f"Demo ticket UUIDs:")
+    # ---- Tickets ---------------------------------------------------------
     for t in TICKETS:
-        print(f"  {t['id']:30s}  →  {uuid_for(t['id'])}")
+        tid = uuid_for(t["id"])
+        obj = await session.get(Ticket, tid)
+        fields = dict(
+            workspace_id=ws_id,
+            project_id=uuid_for(t["project_id"]),
+            integration_id=uuid_for(t["integration_id"]) if t.get("integration_id") else None,
+            source_system=t["source_system"],
+            external_id=t.get("external_id"),
+            external_url=t.get("external_url"),
+            source_created_at=_parse_iso(t.get("source_created_at")),
+            source_updated_at=_parse_iso(t.get("source_updated_at")),
+            ingested_at=_parse_iso(t["ingested_at"]) or datetime.utcnow(),
+            title=t["title"],
+            description=t.get("description"),
+            status=t["status"],
+            priority=t["priority"],
+            client_name=t.get("client_name"),
+            environment=t.get("environment"),
+            component=t.get("component"),
+            service_name=t.get("service_name"),
+            area_path=t.get("area_path"),
+            labels=list(t.get("labels", [])),
+            assignee=t.get("assignee"),
+            reporter=t.get("reporter"),
+        )
+        if obj is None:
+            session.add(Ticket(id=tid, **fields))
+        else:
+            for k, v in fields.items():
+                setattr(obj, k, v)
+
+    # ---- Comments --------------------------------------------------------
+    # Wipe + reinsert comments rather than upsert — easier and matches
+    # how the source-system sync will work later (replace by ticket).
+    for t in TICKETS:
+        tid = uuid_for(t["id"])
+        await session.execute(
+            delete(TicketComment).where(TicketComment.ticket_id == tid)
+        )
+
+    for c in COMMENTS:
+        session.add(TicketComment(
+            id=uuid_for(c["id"]),
+            ticket_id=uuid_for(c["ticket_id"]),
+            source=c.get("source", "internal"),
+            external_id=c.get("external_id"),
+            author=c["author"],
+            body=c["body"],
+        ))
+
+    return ws_id
+
+
+async def seed(verbose: bool = True) -> None:
+    """
+    Idempotently seed demo data. Uses its own short-lived engine so callers
+    (script CLI, test conftest) don't pollute the global engine cache.
+    """
+    settings = get_settings()
+    if not settings.database_url:
+        raise RuntimeError("DATABASE_URL is not set")
+
+    engine = create_async_engine(settings.database_url)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    try:
+        async with factory() as session:
+            ws_id = await _seed_into(session)
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+    if verbose:
+        print(
+            f"Seeded: 1 workspace, "
+            f"{len(INTEGRATIONS)} integrations, "
+            f"{len(PROJECTS)} projects, "
+            f"{len(TICKETS)} tickets, "
+            f"{len(COMMENTS)} comments"
+        )
+        print(f"Workspace UUID: {ws_id}")
+        print("Demo ticket UUIDs:")
+        for t in TICKETS:
+            print(f"  {t['id']:30s}  →  {uuid_for(t['id'])}")
 
 
 if __name__ == "__main__":

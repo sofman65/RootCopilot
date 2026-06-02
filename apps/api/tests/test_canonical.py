@@ -3,9 +3,15 @@ Regression tests for canonical API endpoints.
 Based on docs/api-contracts.md v0.1.
 """
 
-DEMO_TICKET_ID = "ticket_merchant_config"
-DEMO_PROJECT_ID = "project_payments"
-DEMO_INTEGRATION_ID = "int_manual"
+from tests._demo_uuids import (
+    TICKET_MERCHANT_CONFIG as DEMO_TICKET_ID,
+    PROJECT_PAYMENTS as DEMO_PROJECT_ID,
+    INT_MANUAL as DEMO_INTEGRATION_ID,
+    WS_DEMO,
+)
+
+# Valid UUID that doesn't exist in the DB — used for 404 tests.
+NONEXISTENT_UUID = "00000000-0000-0000-0000-000000000000"
 
 
 # ===========================================================================
@@ -25,10 +31,12 @@ class TestHealth:
 
 class TestWorkspaceCurrent:
     def test_returns_workspace(self, client):
+        import uuid
         r = client.get("/workspace/current")
         assert r.status_code == 200
         body = r.json()
-        assert body["id"] == "ws_demo"
+        # DB-backed: id is now a UUID string, not the legacy "ws_demo"
+        uuid.UUID(body["id"])  # raises if not a valid UUID
         assert body["name"]
         assert "created_at" in body
         assert "updated_at" in body
@@ -102,7 +110,7 @@ class TestIntegrations:
         assert "id" in body
 
     def test_sync_unknown_returns_404(self, client):
-        r = client.post("/integrations/nonexistent/sync")
+        r = client.post(f"/integrations/{NONEXISTENT_UUID}/sync")
         assert r.status_code == 404
 
 
@@ -131,7 +139,7 @@ class TestProjects:
         assert body["name"] == "Payments API"
 
     def test_get_nonexistent_returns_404(self, client):
-        r = client.get("/projects/does_not_exist")
+        r = client.get(f"/projects/{NONEXISTENT_UUID}")
         assert r.status_code == 404
 
     def test_create(self, client):
@@ -142,12 +150,12 @@ class TestProjects:
         assert r.status_code == 201
         body = r.json()
         assert body["name"] == "Regression Test Project"
-        assert body["workspace_id"] == "ws_demo"
+        assert body["workspace_id"] == WS_DEMO
         assert "id" in body
 
     def test_create_with_bad_integration_returns_404(self, client):
         r = client.post("/projects", json={
-            "integration_id": "nonexistent",
+            "integration_id": NONEXISTENT_UUID,
             "name": "Bad project",
         })
         assert r.status_code == 404
@@ -207,7 +215,7 @@ class TestTicketGet:
         assert r.json()["id"] == DEMO_TICKET_ID
 
     def test_get_nonexistent_returns_404(self, client):
-        r = client.get("/tickets/does_not_exist")
+        r = client.get(f"/tickets/{NONEXISTENT_UUID}")
         assert r.status_code == 404
 
 
@@ -223,7 +231,7 @@ class TestTicketCreate:
         assert body["source_system"] == "manual"
         assert body["external_id"] is None
         assert body["external_url"] is None
-        assert body["workspace_id"] == "ws_demo"
+        assert body["workspace_id"] == WS_DEMO
 
     def test_create_defaults_to_manual_integration(self, client):
         r = client.post("/tickets", json={
@@ -236,7 +244,7 @@ class TestTicketCreate:
 
     def test_create_with_bad_project_returns_404(self, client):
         r = client.post("/tickets", json={
-            "project_id": "nonexistent",
+            "project_id": NONEXISTENT_UUID,
             "title": "Should fail",
         })
         assert r.status_code == 404
@@ -263,7 +271,7 @@ class TestTicketPatch:
         assert r.json()["priority"] == "High"
 
     def test_patch_nonexistent_returns_404(self, client):
-        r = client.patch("/tickets/nonexistent", json={"status": "Open"})
+        r = client.patch(f"/tickets/{NONEXISTENT_UUID}", json={"status": "Open"})
         assert r.status_code == 404
 
     def test_patch_updates_updated_at(self, client, created_ticket):
@@ -307,7 +315,7 @@ class TestComments:
         assert r.status_code == 200
 
     def test_list_nonexistent_ticket_returns_404(self, client):
-        r = client.get("/tickets/nonexistent/comments")
+        r = client.get(f"/tickets/{NONEXISTENT_UUID}/comments")
         assert r.status_code == 404
 
     def test_create_empty_body_returns_400(self, client):
@@ -343,7 +351,7 @@ class TestArtifacts:
         assert r.status_code == 400
 
     def test_list_nonexistent_ticket_returns_404(self, client):
-        r = client.get("/tickets/nonexistent/artifacts")
+        r = client.get(f"/tickets/{NONEXISTENT_UUID}/artifacts")
         assert r.status_code == 404
 
 
@@ -406,11 +414,11 @@ class TestAnalysis:
         assert r.json()["id"] == analysis_id
 
     def test_get_analysis_nonexistent_ticket_returns_404(self, client):
-        r = client.get("/tickets/nonexistent/analysis")
+        r = client.get(f"/tickets/{NONEXISTENT_UUID}/analysis")
         assert r.status_code == 404
 
     def test_analyze_nonexistent_ticket_returns_404(self, client):
-        r = client.post("/tickets/nonexistent/analyze", json={})
+        r = client.post(f"/tickets/{NONEXISTENT_UUID}/analyze", json={})
         assert r.status_code == 404
 
 

@@ -33,7 +33,7 @@ export default function SearchPage() {
       })
       .catch((error) => {
         console.error("Search failed:", error);
-        if (!cancelled) setResults({ issues: [], messages: [] });
+        if (!cancelled) setResults({ tickets: [], comments: [], issues: [], messages: [] });
       })
       .finally(() => {
         if (!cancelled) setIsSearching(false);

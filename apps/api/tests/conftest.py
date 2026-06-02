@@ -4,8 +4,12 @@ Test fixtures.
 Forces USE_MOCK_LLM=true and a placeholder ANTHROPIC_API_KEY *before*
 any app imports, so the LLMSubsystem uses MockAnalysisAgent and tests
 never make network calls.
+
+When DATABASE_URL is set (Postgres reachable), runs the seed script
+once at session start so DB-backed endpoints have data to read.
 """
 
+import asyncio
 import os
 
 os.environ.setdefault("USE_MOCK_LLM", "true")
@@ -22,7 +26,16 @@ get_settings.cache_clear()
 from app.llm.subsystem import reset_subsystem
 reset_subsystem()
 
-from app.main import app
+# Seed the DB before importing the app. The seed uses its own short-lived
+# engine, so it doesn't pollute app.db._engine — that one is created lazily
+# inside the TestClient's event loop when the first request hits a DB-backed
+# route.
+_settings = get_settings()
+if _settings.database_url:
+    from app.scripts.seed_demo_data import seed
+    asyncio.run(seed(verbose=False))
+
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -35,8 +48,9 @@ def client():
 @pytest.fixture(scope="module")
 def created_ticket(client):
     """A ticket created fresh for tests that need a mutable resource."""
+    from tests._demo_uuids import PROJECT_PAYMENTS
     r = client.post("/tickets", json={
-        "project_id": "project_payments",
+        "project_id": PROJECT_PAYMENTS,
         "title": "Regression test ticket",
         "description": "Created by the test suite.",
         "status": "Open",
