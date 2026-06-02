@@ -51,8 +51,26 @@ def _parse_iso(s: Optional[str]) -> Optional[datetime]:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-async def _seed_into(session) -> uuid.UUID:
-    """Run the seed logic inside an existing async session. Returns workspace_id."""
+async def _prune_pollution(session) -> int:
+    """
+    Delete any ticket whose UUID is not in the deterministic seed set.
+    CASCADE FK chain removes the corresponding comments / artifacts / analysis_runs.
+    Returns the number of tickets deleted.
+    """
+    seeded_ticket_ids = [uuid_for(t["id"]) for t in TICKETS]
+    result = await session.execute(
+        delete(Ticket).where(Ticket.id.not_in(seeded_ticket_ids))
+    )
+    return result.rowcount or 0
+
+
+async def _seed_into(session, prune: bool = False) -> tuple[uuid.UUID, int]:
+    """
+    Run the seed logic inside an existing async session.
+    Returns (workspace_id, pruned_count).
+    """
+    pruned = await _prune_pollution(session) if prune else 0
+
     ws_id = uuid_for(WORKSPACE["id"])
 
     # ---- Workspace -------------------------------------------------------
@@ -148,13 +166,16 @@ async def _seed_into(session) -> uuid.UUID:
             body=c["body"],
         ))
 
-    return ws_id
+    return ws_id, pruned
 
 
-async def seed(verbose: bool = True) -> None:
+async def seed(verbose: bool = True, prune: bool = False) -> None:
     """
     Idempotently seed demo data. Uses its own short-lived engine so callers
     (script CLI, test conftest) don't pollute the global engine cache.
+
+    When prune=True, first deletes every ticket whose UUID is not in the
+    deterministic seed set — wipes test-fixture pollution from the dev DB.
     """
     settings = get_settings()
     if not settings.database_url:
@@ -165,12 +186,14 @@ async def seed(verbose: bool = True) -> None:
 
     try:
         async with factory() as session:
-            ws_id = await _seed_into(session)
+            ws_id, pruned = await _seed_into(session, prune=prune)
             await session.commit()
     finally:
         await engine.dispose()
 
     if verbose:
+        if prune:
+            print(f"Pruned: {pruned} non-seeded tickets (and their dependents via CASCADE)")
         print(
             f"Seeded: 1 workspace, "
             f"{len(INTEGRATIONS)} integrations, "
@@ -185,4 +208,6 @@ async def seed(verbose: bool = True) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    import sys
+    prune_flag = "--prune" in sys.argv
+    asyncio.run(seed(prune=prune_flag))

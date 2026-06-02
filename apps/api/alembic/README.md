@@ -21,6 +21,9 @@ alembic upgrade head
 
 # 5. Roll back one revision if needed
 alembic downgrade -1
+
+# 6. Wipe test pollution from dev DB before a demo (keeps only the 3 seeded tickets)
+uv run python -m app.scripts.seed_demo_data --prune
 ```
 
 ## Useful commands
