@@ -1,51 +1,22 @@
+"""Search — DB-backed via search_service (tickets, comments, chat messages)."""
+
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db import get_session
 from app.schemas import SearchResponse
-from app.schemas.search import TicketSearchResult
-from app.demo_data import TICKETS, COMMENTS, _ticket_breadcrumb
+from app.services import search_service
 
 router = APIRouter()
 
 
-@router.get("/search")
-def search(
+@router.get("/search", response_model=SearchResponse)
+async def search(
     q: Optional[str] = None,
     term: Optional[str] = None,
     scope: Optional[str] = "all",
+    session: AsyncSession = Depends(get_session),
 ):
-    query = (q or term or "").lower().strip()
-    if not query:
-        return SearchResponse(
-            tickets=[], comments=[], artifacts=[], analysis=[],
-            issues=[], messages=[],
-        )
-
-    matched_tickets = [
-        TicketSearchResult(
-            id=t["id"],
-            title=t["title"],
-            breadcrumb=_ticket_breadcrumb(t),
-            environment=t.get("environment"),
-            priority=t.get("priority", ""),
-            status=t.get("status", ""),
-        )
-        for t in TICKETS
-        if query in t["title"].lower() or query in (t.get("description") or "").lower()
-        or query in (t.get("environment") or "").lower()
-        or query in (t.get("client_name") or "").lower()
-    ]
-
-    matched_comments = [
-        c for c in COMMENTS if query in c["body"].lower()
-    ]
-
-    return SearchResponse(
-        tickets=matched_tickets,
-        comments=matched_comments,
-        artifacts=[],
-        analysis=[],
-        issues=matched_tickets,
-        messages=matched_comments,
-    )
+    return await search_service.search(session, q or term)

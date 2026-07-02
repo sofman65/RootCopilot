@@ -11,10 +11,13 @@ from typing import Optional
 
 from fastapi import HTTPException
 
+from typing import List
+
 from app.llm.agent import AnalysisAgent, MockAnalysisAgent
+from app.llm.chat_agent import ChatAgent, MockChatAgent
 from app.llm.cache import ResponseCache
 from app.llm.config import get_settings
-from app.llm.models import LLMRequest, LLMResponse, UsageMetrics
+from app.llm.models import ChatResult, ChatTurn, LLMRequest, LLMResponse, UsageMetrics
 from app.llm.monitoring import MetricsCollector, RequestTimer, get_logger
 from app.llm.security import SecurityPipeline
 
@@ -46,6 +49,7 @@ class LLMSubsystem:
         self.cache = ResponseCache(ttl_seconds=settings.cache_ttl_seconds)
         self.metrics = MetricsCollector()
         self.agent = MockAnalysisAgent() if settings.use_mock_llm else AnalysisAgent()
+        self.chat_agent = MockChatAgent() if settings.use_mock_llm else ChatAgent()
         self.use_mock = settings.use_mock_llm
 
         logger.info("LLMSubsystem initialised", extra={"extra_data": {
@@ -150,6 +154,61 @@ class LLMSubsystem:
         if model_used == "openai":
             return getattr(self.agent, "fallback_model_name", "openai")
         return "mock-model"
+
+    def chat(
+        self,
+        system_prompt: str,
+        history: List[ChatTurn],
+        user_message: str,
+    ) -> ChatResult:
+        """
+        Free-text conversational completion (Copilot threads + RAG answers).
+
+        Runs the same security in/out checks and metrics recording as analyze(),
+        but is not cached — conversations are inherently non-idempotent.
+        """
+        with RequestTimer() as timer:
+            is_allowed, cleaned_message, sec_notes = self.security.check_input(user_message)
+            if not is_allowed:
+                self.metrics.record_request(latency_ms=0, error=True)
+                logger.warning("Chat blocked by security", extra={"extra_data": {
+                    "notes": sec_notes,
+                }})
+                raise HTTPException(status_code=400, detail="Message blocked by security filters")
+
+            try:
+                out = self.chat_agent.reply(system_prompt, history, cleaned_message)
+            except Exception as e:
+                self.metrics.record_request(latency_ms=0, error=True)
+                logger.error("Chat agent invocation failed", extra={"extra_data": {
+                    "error": str(e),
+                }})
+                raise HTTPException(status_code=502, detail="Chat provider error")
+
+            validated_content, output_notes = self.security.check_output(out["content"])
+
+            input_tokens = out.get("input_tokens", 0) or int(len(cleaned_message.split()) * 1.3)
+            output_tokens = out.get("output_tokens", 0) or int(len(validated_content.split()) * 1.3)
+
+        self.metrics.record_request(
+            latency_ms=timer.elapsed_ms,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cache_hit=False,
+        )
+
+        notes = sec_notes + output_notes
+        if notes:
+            logger.info("Chat security notes", extra={"extra_data": {"notes": notes}})
+
+        return ChatResult(
+            content=validated_content,
+            model=out.get("model_name", "unknown"),
+            provider=out.get("model_used", "unknown"),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=int(getattr(timer, "elapsed_ms", 0) or 0),
+        )
 
 
 # ---------------------------------------------------------------------------

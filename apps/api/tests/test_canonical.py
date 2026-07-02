@@ -498,10 +498,16 @@ class TestRag:
         assert body["title"] == "test-doc.txt"
         assert body["namespace"] == "test"
 
-    def test_ask_returns_answer_and_sources(self, client):
+    def test_ask_returns_answer_and_contexts(self, client):
         r = client.post("/rag/ask", json={"question": "What caused the terminal profile error?"})
         assert r.status_code == 200
         body = r.json()
         assert "answer" in body
-        assert "sources" in body
-        assert isinstance(body["sources"], list)
+        assert isinstance(body["answer"], str) and body["answer"]
+        assert "contexts" in body
+        assert isinstance(body["contexts"], list)
+        # Retrieval should surface the seeded merchant-config knowledge doc.
+        for ctx in body["contexts"]:
+            assert "chunk" in ctx
+            assert "score" in ctx
+            assert "doc" in ctx

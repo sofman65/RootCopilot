@@ -9,7 +9,7 @@ import {
   IconCheck,
 } from "@tabler/icons-react";
 
-import { type AnalysisRun } from "@/lib/rootcopilot-api";
+import { type AnalysisRun, type AnalysisResultJson } from "@/lib/rootcopilot-api";
 import { Badge, confidenceTone } from "@/components/ui/Badge";
 
 const CONFIDENCE_DOT: Record<"high" | "medium" | "low", string> = {
@@ -18,8 +18,31 @@ const CONFIDENCE_DOT: Record<"high" | "medium" | "low", string> = {
   low: "bg-red-500",
 };
 
+/**
+ * Normalize result_json defensively. The API guarantees the full shape, but
+ * older persisted runs (or cached responses from previous API versions) may
+ * be partial — never let a missing field crash the page.
+ */
+function normalizeResultJson(
+  rj: Partial<AnalysisResultJson> | null | undefined,
+): AnalysisResultJson | null {
+  if (!rj) return null;
+  const confidence =
+    rj.confidence === "high" || rj.confidence === "medium" || rj.confidence === "low"
+      ? rj.confidence
+      : "low";
+  return {
+    summary: rj.summary ?? "",
+    likely_root_cause: rj.likely_root_cause ?? "",
+    confidence,
+    evidence: Array.isArray(rj.evidence) ? rj.evidence : [],
+    suggested_steps: Array.isArray(rj.suggested_steps) ? rj.suggested_steps : [],
+    stakeholder_summary: rj.stakeholder_summary ?? "",
+  };
+}
+
 export function AnalysisCard({ analysis }: { analysis: AnalysisRun }) {
-  const rj = analysis.result_json;
+  const rj = normalizeResultJson(analysis.result_json);
   if (!rj) return null;
 
   return (
@@ -38,25 +61,29 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisRun }) {
 
       <div className="divide-y divide-neutral-100 dark:divide-neutral-800">
         {/* Summary — small caption above root cause */}
-        <div className="px-5 pt-4 pb-2">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-            Summary
+        {rj.summary && (
+          <div className="px-5 pt-4 pb-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Summary
+            </div>
+            <p className="mt-1.5 text-sm text-neutral-600 dark:text-neutral-400">{rj.summary}</p>
           </div>
-          <p className="mt-1.5 text-sm text-neutral-600 dark:text-neutral-400">{rj.summary}</p>
-        </div>
+        )}
 
         {/* Likely Root Cause — visually dominant section */}
-        <div className="px-5 py-4 bg-orange-50/40 dark:bg-orange-900/10">
-          <div className="flex items-center gap-1.5 mb-2">
-            <IconAlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-            <span className="text-xs font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
-              Likely Root Cause
-            </span>
+        {rj.likely_root_cause && (
+          <div className="px-5 py-4 bg-orange-50/40 dark:bg-orange-900/10">
+            <div className="flex items-center gap-1.5 mb-2">
+              <IconAlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <span className="text-xs font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                Likely Root Cause
+              </span>
+            </div>
+            <p className="text-[15px] leading-relaxed font-medium text-neutral-900 dark:text-neutral-100">
+              {rj.likely_root_cause}
+            </p>
           </div>
-          <p className="text-[15px] leading-relaxed font-medium text-neutral-900 dark:text-neutral-100">
-            {rj.likely_root_cause}
-          </p>
-        </div>
+        )}
 
         {/* Evidence — items with leading check icons */}
         {rj.evidence.length > 0 && (
@@ -89,11 +116,13 @@ export function AnalysisCard({ analysis }: { analysis: AnalysisRun }) {
         )}
 
         {/* Stakeholder Summary — blockquote style with left accent */}
-        <Section icon={<IconUsers className="h-4 w-4 text-neutral-500" />} label="Stakeholder Summary">
-          <blockquote className="border-l-4 border-indigo-400 dark:border-indigo-500 pl-4 italic text-sm text-neutral-700 dark:text-neutral-300">
-            &ldquo;{rj.stakeholder_summary}&rdquo;
-          </blockquote>
-        </Section>
+        {rj.stakeholder_summary && (
+          <Section icon={<IconUsers className="h-4 w-4 text-neutral-500" />} label="Stakeholder Summary">
+            <blockquote className="border-l-4 border-indigo-400 dark:border-indigo-500 pl-4 italic text-sm text-neutral-700 dark:text-neutral-300">
+              &ldquo;{rj.stakeholder_summary}&rdquo;
+            </blockquote>
+          </Section>
+        )}
       </div>
     </div>
   );

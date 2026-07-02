@@ -1,13 +1,31 @@
 """
 Regression tests for legacy compatibility endpoints.
 
-These endpoints keep the existing frontend sidebar working during migration
-to the canonical API. They are expected to be removed once the frontend
-migrates to GET /workspace/tree.
+The sidebar tree (clients → projects → environments → issues) is still derived
+from in-memory demo_data. The issue detail + copilot thread/message endpoints
+are now DB-backed (routers/chat.py) and key on ticket UUIDs.
 """
 
+import pytest
+
+from tests._demo_uuids import TICKET_MERCHANT_CONFIG
+
 DEMO_TICKET_ID = "ticket_merchant_config"
-DEMO_THREAD_ID = "thread_merchant_config"
+NONEXISTENT_UUID = "00000000-0000-0000-0000-0000000000ff"
+
+
+@pytest.fixture(scope="module")
+def demo_thread_id(client):
+    """Create (idempotently) the copilot thread for the merchant-config ticket
+    and seed one user message, so message-list tests have content."""
+    r = client.post(f"/issues/{TICKET_MERCHANT_CONFIG}/thread")
+    assert r.status_code == 200
+    thread_id = r.json()["_id"]
+    client.post(
+        f"/threads/{thread_id}/messages",
+        json={"content": "Seed message for regression tests."},
+    )
+    return thread_id
 
 
 # ===========================================================================
@@ -134,96 +152,95 @@ class TestLegacyIssues:
         assert r.json() == []
 
 
-class TestLegacyIssueGet:
-    def test_get_issue_by_ticket_id(self, client):
-        r = client.get(f"/issues/{DEMO_TICKET_ID}")
+class TestIssueGet:
+    def test_get_issue_by_ticket_uuid(self, client):
+        r = client.get(f"/issues/{TICKET_MERCHANT_CONFIG}")
         assert r.status_code == 200
         body = r.json()
-        assert body["_id"] == DEMO_TICKET_ID
+        assert body["_id"] == TICKET_MERCHANT_CONFIG
         assert "title" in body
         assert "breadcrumb" in body
 
     def test_get_nonexistent_issue_returns_404(self, client):
-        r = client.get("/issues/nonexistent_ticket")
+        r = client.get(f"/issues/{NONEXISTENT_UUID}")
         assert r.status_code == 404
 
 
 # ===========================================================================
-# Legacy thread & messages
+# Copilot thread & messages (DB-backed, keyed on ticket UUIDs)
 # ===========================================================================
 
-class TestLegacyThread:
-    def test_get_thread_for_demo_ticket(self, client):
-        r = client.get(f"/issues/{DEMO_TICKET_ID}/thread")
+class TestChatThread:
+    def test_get_thread_after_create(self, client):
+        client.post(f"/issues/{TICKET_MERCHANT_CONFIG}/thread")
+        r = client.get(f"/issues/{TICKET_MERCHANT_CONFIG}/thread")
         assert r.status_code == 200
         body = r.json()
-        assert body["issue_id"] == DEMO_TICKET_ID
+        assert body["issue_id"] == TICKET_MERCHANT_CONFIG
         assert "_id" in body
 
     def test_create_thread_idempotent(self, client):
-        r1 = client.post(f"/issues/{DEMO_TICKET_ID}/thread")
-        r2 = client.post(f"/issues/{DEMO_TICKET_ID}/thread")
+        r1 = client.post(f"/issues/{TICKET_MERCHANT_CONFIG}/thread")
+        r2 = client.post(f"/issues/{TICKET_MERCHANT_CONFIG}/thread")
         assert r1.status_code == 200
         assert r2.status_code == 200
         assert r1.json()["_id"] == r2.json()["_id"]
 
-    def test_get_nonexistent_thread_returns_404(self, client):
-        r = client.get("/issues/nonexistent_ticket/thread")
+    def test_get_thread_for_nonexistent_ticket_returns_404(self, client):
+        r = client.get(f"/issues/{NONEXISTENT_UUID}/thread")
         assert r.status_code == 404
 
 
-class TestLegacyMessages:
-    def test_list_messages_for_demo_thread(self, client):
-        r = client.get(f"/threads/{DEMO_THREAD_ID}/messages")
+class TestChatMessages:
+    def test_list_messages_for_thread(self, client, demo_thread_id):
+        r = client.get(f"/threads/{demo_thread_id}/messages")
         assert r.status_code == 200
-        msgs = r.json()
-        assert len(msgs) >= 1
+        assert len(r.json()) >= 1
 
-    def test_message_shape(self, client):
-        msgs = client.get(f"/threads/{DEMO_THREAD_ID}/messages").json()
+    def test_message_shape(self, client, demo_thread_id):
+        msgs = client.get(f"/threads/{demo_thread_id}/messages").json()
         for m in msgs:
             assert "_id" in m
-            assert "role" in m
             assert m["role"] in ("user", "assistant")
             assert "content" in m
-            assert "created_at" in m
+            assert isinstance(m["created_at"], int)
 
-    def test_send_user_message(self, client):
+    def test_send_user_message(self, client, demo_thread_id):
         r = client.post(
-            f"/threads/{DEMO_THREAD_ID}/messages",
+            f"/threads/{demo_thread_id}/messages",
             json={"content": "What is the likely fix?"},
         )
         assert r.status_code == 200
         body = r.json()
         assert body["role"] == "user"
         assert body["content"] == "What is the likely fix?"
-        assert body["thread_id"] == DEMO_THREAD_ID
+        assert body["thread_id"] == demo_thread_id
 
-    def test_send_empty_message_returns_400(self, client):
+    def test_send_empty_message_returns_400(self, client, demo_thread_id):
         r = client.post(
-            f"/threads/{DEMO_THREAD_ID}/messages",
+            f"/threads/{demo_thread_id}/messages",
             json={"content": ""},
         )
         assert r.status_code == 400
 
-    def test_assistant_reply(self, client):
-        r = client.post(f"/threads/{DEMO_THREAD_ID}/assistant/reply")
+    def test_assistant_reply(self, client, demo_thread_id):
+        r = client.post(f"/threads/{demo_thread_id}/assistant/reply")
         assert r.status_code == 200
         body = r.json()
         assert body["role"] == "assistant"
         assert body["content"]
 
-    def test_quick_action_user_message(self, client):
+    def test_quick_action_user_message(self, client, demo_thread_id):
         r = client.post(
-            f"/threads/{DEMO_THREAD_ID}/quick-action-message",
+            f"/threads/{demo_thread_id}/quick-action-message",
             json={"instruction": "Summarize"},
         )
         assert r.status_code == 200
         assert r.json()["role"] == "user"
 
-    def test_quick_action_assistant_reply(self, client):
+    def test_quick_action_assistant_reply(self, client, demo_thread_id):
         r = client.post(
-            f"/threads/{DEMO_THREAD_ID}/assistant/quick-action",
+            f"/threads/{demo_thread_id}/assistant/quick-action",
             json={"instruction": "Summarize"},
         )
         assert r.status_code == 200

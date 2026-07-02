@@ -11,6 +11,7 @@ from app.api.v1.routers import (
     analysis,
     search,
     rag,
+    chat,
     legacy,
     llm,
 )
@@ -27,5 +28,6 @@ api_router.include_router(artifacts.router)
 api_router.include_router(analysis.router)
 api_router.include_router(search.router)
 api_router.include_router(rag.router)
+api_router.include_router(chat.router)
 api_router.include_router(legacy.router)
 api_router.include_router(llm.router)

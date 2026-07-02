@@ -82,6 +82,29 @@ class LLMResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Free-text chat (Copilot conversations + RAG answers)
+# ---------------------------------------------------------------------------
+
+
+class ChatTurn(BaseModel):
+    """One prior message in a conversation, replayed to the model."""
+
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatResult(BaseModel):
+    """Free-text completion returned by LLMSubsystem.chat()."""
+
+    content: str
+    model: str
+    provider: str            # "anthropic" | "openai" | "mock"
+    input_tokens: int = 0
+    output_tokens: int = 0
+    latency_ms: int = 0
+
+
+# ---------------------------------------------------------------------------
 # Health check (used by health router + monitoring.py)
 # ---------------------------------------------------------------------------
 

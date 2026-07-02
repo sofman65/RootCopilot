@@ -167,10 +167,21 @@ async def test_create_and_get_latest_analysis(session, demo_ticket_id):
         instruction="repository test instruction",
         status="done",
         model="mock-model",
-        result_json={"summary": "test", "confidence": "high"},
+        # Full AnalysisResultJson contract — partial shapes must never be
+        # persisted (clients read this JSONB back through the API).
+        result_json={
+            "summary": "test",
+            "likely_root_cause": "test root cause",
+            "confidence": "high",
+            "evidence": ["test evidence"],
+            "suggested_steps": ["test step"],
+            "stakeholder_summary": "test stakeholder summary",
+        },
         similar_tickets=[],
     )
-    await session.commit()
+    # flush (not commit): the read-back below sees the row inside the same
+    # transaction, and session close rolls it back — no dev-DB pollution.
+    await session.flush()
 
     latest = await repo.get_latest_by_ticket(demo_ticket_id)
     assert latest is not None

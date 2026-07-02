@@ -202,6 +202,27 @@ RAG_ENTRIES = [
     }
 ]
 
+# Knowledge documents seeded into the RAG corpus (knowledge_documents table).
+# Give the retriever real grounded content out of the box.
+KNOWLEDGE_DOCUMENTS = [
+    {
+        "id": "rag_1",
+        "namespace": "payments",
+        "name": "Merchant configuration incident notes",
+        "content": (
+            "When authorization attempts fail for a single merchant in a lower "
+            "environment (UAT/SIT) while other merchants succeed, the cause is "
+            "almost always a missing terminal profile for that merchant. The "
+            "terminal profile maps the merchant ID (for example DEMO-102) to its "
+            "acquirer and MID/TID configuration. If the profile was never "
+            "provisioned in the target environment, the authorization service "
+            "rejects the transaction before it reaches the acquirer. "
+            "Resolution: provision the terminal profile for the affected merchant "
+            "in the target environment, then replay a test authorization."
+        ),
+    }
+]
+
 # ---------------------------------------------------------------------------
 # Helpers for legacy endpoint derivation
 # ---------------------------------------------------------------------------

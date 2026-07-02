@@ -13,6 +13,11 @@ from app.repositories.ticket_repository import TicketRepository
 from app.repositories.ticket_comment_repository import TicketCommentRepository
 from app.repositories.ticket_artifact_repository import TicketArtifactRepository
 from app.repositories.analysis_run_repository import AnalysisRunRepository
+from app.repositories.chat_repository import (
+    ChatThreadRepository,
+    ChatMessageRepository,
+)
+from app.repositories.knowledge_document_repository import KnowledgeDocumentRepository
 
 __all__ = [
     "WorkspaceRepository",
@@ -22,4 +27,7 @@ __all__ = [
     "TicketCommentRepository",
     "TicketArtifactRepository",
     "AnalysisRunRepository",
+    "ChatThreadRepository",
+    "ChatMessageRepository",
+    "KnowledgeDocumentRepository",
 ]

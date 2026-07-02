@@ -25,6 +25,14 @@ class ProjectRepository(BaseRepository):
         )
         return list(r.scalars().all())
 
+    async def list_by_ids(self, project_ids: List[UUID]) -> List[Project]:
+        if not project_ids:
+            return []
+        r = await self.session.execute(
+            select(Project).where(Project.id.in_(project_ids))
+        )
+        return list(r.scalars().all())
+
     async def create(
         self,
         workspace_id: UUID,

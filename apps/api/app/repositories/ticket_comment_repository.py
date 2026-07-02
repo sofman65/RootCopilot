@@ -18,6 +18,21 @@ class TicketCommentRepository(BaseRepository):
         )
         return list(r.scalars().all())
 
+    async def list_all(self, limit: int = 500) -> List[TicketComment]:
+        r = await self.session.execute(
+            select(TicketComment).order_by(TicketComment.created_at.desc()).limit(limit)
+        )
+        return list(r.scalars().all())
+
+    async def search(self, query: str, limit: int = 20) -> List[TicketComment]:
+        r = await self.session.execute(
+            select(TicketComment)
+            .where(TicketComment.body.ilike(f"%{query}%"))
+            .order_by(TicketComment.created_at.desc())
+            .limit(limit)
+        )
+        return list(r.scalars().all())
+
     async def create(
         self,
         ticket_id: UUID,

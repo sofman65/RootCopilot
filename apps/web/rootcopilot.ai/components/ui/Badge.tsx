@@ -55,7 +55,7 @@ export function Badge({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[tone]} ${className}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[tone] ?? TONE_CLASSES.neutral} ${className}`}
     >
       {children}
     </span>
@@ -65,27 +65,38 @@ export function Badge({
 // --- value-to-tone helpers ---
 
 export function priorityTone(priority: string): Tone {
-  switch (priority) {
-    case "Critical": return "critical";
-    case "High": return "high";
-    case "Medium": return "medium";
-    case "Low": return "low";
+  switch (priority?.toLowerCase()) {
+    case "critical": return "critical";
+    case "highest":
+    case "high": return "high";
+    case "medium": return "medium";
+    case "lowest":
+    case "low": return "low";
     default: return "neutral";
   }
 }
 
 export function statusTone(status: string): Tone {
-  switch (status) {
-    case "Open": return "open";
-    case "In Progress": return "in-progress";
-    case "Resolved": return "resolved";
-    case "Closed": return "closed";
+  switch (status?.toLowerCase()) {
+    case "open":
+    case "new":
+    case "to do": return "open";
+    case "in progress":
+    case "active": return "in-progress";
+    case "resolved":
+    case "done": return "resolved";
+    case "closed": return "closed";
     default: return "neutral";
   }
 }
 
-export function confidenceTone(confidence: "high" | "medium" | "low"): Tone {
-  return `confidence-${confidence}` as Tone;
+export function confidenceTone(confidence: string): Tone {
+  switch (confidence?.toLowerCase()) {
+    case "high": return "confidence-high";
+    case "medium": return "confidence-medium";
+    case "low": return "confidence-low";
+    default: return "neutral";
+  }
 }
 
 export function sourceTone(source: string): Tone {

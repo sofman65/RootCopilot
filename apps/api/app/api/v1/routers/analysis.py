@@ -13,6 +13,29 @@ from app.services import analysis_service
 
 router = APIRouter()
 
+_VALID_CONFIDENCE = {"high", "medium", "low"}
+
+
+def _normalize_result_json(rj) -> "dict | None":
+    """
+    Coerce stored JSONB to the published AnalysisResultJson contract.
+
+    Rows written by older code paths (or directly via the repository) may be
+    partial — the API must still emit every field so clients can rely on the
+    schema without defensive checks.
+    """
+    if not isinstance(rj, dict):
+        return None
+    confidence = str(rj.get("confidence", "")).lower()
+    return {
+        "summary": rj.get("summary") or "",
+        "likely_root_cause": rj.get("likely_root_cause") or "",
+        "confidence": confidence if confidence in _VALID_CONFIDENCE else "low",
+        "evidence": [str(e) for e in rj.get("evidence") or []],
+        "suggested_steps": [str(s) for s in rj.get("suggested_steps") or []],
+        "stakeholder_summary": rj.get("stakeholder_summary") or "",
+    }
+
 
 def _analysis_to_dict(r) -> dict:
     return {
@@ -23,7 +46,7 @@ def _analysis_to_dict(r) -> dict:
         "status": r.status,
         "model": r.model,
         "result_markdown": r.result_markdown,
-        "result_json": r.result_json,
+        "result_json": _normalize_result_json(r.result_json),
         "similar_tickets": list(r.similar_tickets or []),
         "input_tokens": r.input_tokens,
         "output_tokens": r.output_tokens,

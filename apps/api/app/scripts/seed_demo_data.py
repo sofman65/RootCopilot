@@ -24,6 +24,7 @@ from app.demo_data import (
     PROJECTS,
     TICKETS,
     COMMENTS,
+    KNOWLEDGE_DOCUMENTS,
 )
 from app.llm.config import get_settings
 from app.models import (
@@ -32,6 +33,7 @@ from app.models import (
     Project,
     Ticket,
     TicketComment,
+    KnowledgeDocument,
 )
 
 
@@ -165,6 +167,23 @@ async def _seed_into(session, prune: bool = False) -> tuple[uuid.UUID, int]:
             author=c["author"],
             body=c["body"],
         ))
+
+    # ---- Knowledge documents (RAG corpus) --------------------------------
+    # Upsert by deterministic UUID so re-seeding refreshes the demo docs
+    # without wiping user-uploaded documents.
+    for d in KNOWLEDGE_DOCUMENTS:
+        did = uuid_for(d["id"])
+        obj = await session.get(KnowledgeDocument, did)
+        fields = dict(
+            namespace=d.get("namespace", "default"),
+            name=d["name"],
+            content=d["content"],
+        )
+        if obj is None:
+            session.add(KnowledgeDocument(id=did, **fields))
+        else:
+            for k, v in fields.items():
+                setattr(obj, k, v)
 
     return ws_id, pruned
 

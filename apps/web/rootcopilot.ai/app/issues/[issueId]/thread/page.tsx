@@ -45,6 +45,8 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
   const [issue, setIssue] = React.useState<Issue | null>(null);
   const [thread, setThread] = React.useState<Thread | null>(null);
   const [messages, setMessages] = React.useState<ThreadMessage[] | undefined>(undefined);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [chatError, setChatError] = React.useState<string | null>(null);
 
   const refreshMessages = React.useCallback(async (threadId: string) => {
     const nextMessages = await listThreadMessages(threadId);
@@ -56,6 +58,7 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
 
     async function loadThread() {
       try {
+        setLoadError(null);
         const [nextIssue, existingThread] = await Promise.all([
           getIssue(issueId),
           getThreadByIssue(issueId).catch(() => createThread(issueId)),
@@ -71,6 +74,9 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
           setIssue(null);
           setThread(null);
           setMessages([]);
+          setLoadError(
+            error instanceof Error ? error.message : "Failed to load this issue.",
+          );
         }
       }
     }
@@ -212,23 +218,33 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
 
     setIsSending(true);
     setIsAssistantReplying(true);
+    setChatError(null);
 
-    await sendThreadMessage({
-      threadId: thread._id,
-      content: input.trim(),
-    });
+    try {
+      await sendThreadMessage({
+        threadId: thread._id,
+        content: input.trim(),
+      });
 
-    setInput("");
-    await refreshMessages(thread._id);
+      setInput("");
+      await refreshMessages(thread._id);
 
-    await triggerAssistantReply(thread._id);
-    await refreshMessages(thread._id);
+      await triggerAssistantReply(thread._id);
+      await refreshMessages(thread._id);
 
-    scrollToBottom("smooth");
-    updateScrollButton();
-
-    setIsSending(false);
-    setIsAssistantReplying(false);
+      scrollToBottom("smooth");
+      updateScrollButton();
+    } catch (error) {
+      console.error("Failed to send message:", error);
+      setChatError(
+        error instanceof Error ? error.message : "Failed to get a reply. Try again.",
+      );
+      // Keep whatever made it to the server visible.
+      await refreshMessages(thread._id).catch(() => {});
+    } finally {
+      setIsSending(false);
+      setIsAssistantReplying(false);
+    }
   };
 
   // --------------------------------------------
@@ -238,30 +254,58 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
     if (!thread) return;
 
     setIsAssistantReplying(true);
+    setChatError(null);
 
-    // 1. First create a user-style message
-    await sendQuickActionUserMessage({
-      threadId: thread._id,
-      instruction,
-    });
-    await refreshMessages(thread._id);
+    try {
+      // 1. First create a user-style message
+      await sendQuickActionUserMessage({
+        threadId: thread._id,
+        instruction,
+      });
+      await refreshMessages(thread._id);
 
-    // 2. Then trigger the assistant reply
-    await triggerAssistantQuickAction({
-      threadId: thread._id,
-      instruction,
-    });
-    await refreshMessages(thread._id);
+      // 2. Then trigger the assistant reply
+      await triggerAssistantQuickAction({
+        threadId: thread._id,
+        instruction,
+      });
+      await refreshMessages(thread._id);
 
-    scrollToBottom("smooth");
-    updateScrollButton();
-
-    setIsAssistantReplying(false);
+      scrollToBottom("smooth");
+      updateScrollButton();
+    } catch (error) {
+      console.error("Quick action failed:", error);
+      setChatError(
+        error instanceof Error ? error.message : "Quick action failed. Try again.",
+      );
+      await refreshMessages(thread._id).catch(() => {});
+    } finally {
+      setIsAssistantReplying(false);
+    }
   };
 
   // --------------------------------------------
-  // LOADING STATES
+  // LOADING / ERROR STATES
   // --------------------------------------------
+  if (loadError) {
+    return (
+      <div className="flex h-full w-full items-center justify-center p-6">
+        <div className="max-w-md text-center space-y-3">
+          <h1 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+            Couldn&rsquo;t open this issue
+          </h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">{loadError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-lg bg-blue-600 hover:bg-blue-500 px-4 py-2 text-sm font-medium text-white transition"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!issue || !thread) {
     return <div className="p-6">Loading…</div>;
   }
@@ -366,7 +410,18 @@ export default function ThreadPage({ params }: { params: Promise<{ issueId: stri
           px-4 pt-3 pb-4
         "
       >
-        <div className="mx-auto max-w-3xl mb-3">
+        <div className="mx-auto max-w-3xl mb-3 space-y-2">
+          {chatError && (
+            <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs text-red-700 dark:text-red-400 flex items-center justify-between gap-2">
+              <span>{chatError}</span>
+              <button
+                onClick={() => setChatError(null)}
+                className="shrink-0 font-semibold hover:underline"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
           <QuickActions onAction={handleQuickAction} />
         </div>
 

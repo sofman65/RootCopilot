@@ -136,22 +136,34 @@ export default function CopilotPage() {
     setUploadStatus(null);
 
     let count = 0;
+    let failed = 0;
 
-    for (const f of Array.from(files)) {
-      const txt = await f.text();
-      if (!txt.trim()) continue;
+    try {
+      for (const f of Array.from(files)) {
+        const txt = await f.text();
+        if (!txt.trim()) continue;
 
-      await addRagDocument({
-        name: f.name,
-        text: txt,
-        namespace: namespace || undefined,
-      });
+        try {
+          await addRagDocument({
+            name: f.name,
+            text: txt,
+            namespace: namespace || undefined,
+          });
+          count++;
+        } catch (err) {
+          console.error(`Failed to index ${f.name}:`, err);
+          failed++;
+        }
+      }
 
-      count++;
+      setUploadStatus(
+        failed > 0
+          ? `Indexed ${count} file${count !== 1 ? "s" : ""}, ${failed} failed.`
+          : `Indexed ${count} file${count !== 1 ? "s" : ""}.`,
+      );
+    } finally {
+      setUploading(false);
     }
-
-    setUploadStatus(`Indexed ${count} file${count !== 1 ? "s" : ""}.`);
-    setUploading(false);
     // Refresh docs list after upload
     fetchDocs();
   };
